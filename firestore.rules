@@ -1,0 +1,53 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && myProfile().role == 'admin'
+        && myProfile().status == 'approved';
+    }
+
+    function isApprovedMember() {
+      return isSignedIn() && myProfile().status == 'approved';
+    }
+
+    // Members can only read their own doc until approved; approved members
+    // can read the directory of other approved members; admins can read
+    // everyone (needed for the approval queue).
+    match /users/{uid} {
+      allow read: if isSignedIn() && (
+        request.auth.uid == uid
+        || isAdmin()
+        || (isApprovedMember() && resource.data.status == 'approved')
+      );
+
+      // Self-signup always starts as a pending member; role/status can't be
+      // set by the person creating the account.
+      allow create: if isSignedIn()
+        && request.auth.uid == uid
+        && request.resource.data.role == 'member'
+        && request.resource.data.status == 'pending';
+
+      // Members may edit their own contact info but not their role/status.
+      // Admins may edit anything (used to approve/deny and promote members).
+      allow update: if isSignedIn() && (
+        (request.auth.uid == uid
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.status == resource.data.status)
+        || isAdmin()
+      );
+
+      allow delete: if isAdmin();
+    }
+  }
+}

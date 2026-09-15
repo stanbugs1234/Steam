@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "968754784411",
+    "project_id": "steam-club-app",
+    "storage_bucket": "steam-club-app.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:968754784411:android:5b2af43e46e87644c4fe3e",
+        "android_client_info": {
+          "package_name": "com.steamclub.steam_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC9neGwt7RqcYKTpXlzUoXJYpJgbPLgMtg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
