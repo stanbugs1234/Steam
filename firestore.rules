@@ -58,6 +58,33 @@ service cloud.firestore {
     match /events/{eventId} {
       allow read: if isApprovedMember() || isAdmin();
       allow create, update, delete: if isAdmin();
+
+      // Members may only toggle their own membership in signedUpUserIds
+      // (add or remove exactly their own uid, nothing else); admins manage
+      // the slots themselves (label/capacity/create/delete).
+      match /volunteerSlots/{slotId} {
+        function isSelfSignupChange() {
+          let before = resource.data.signedUpUserIds;
+          let after = request.resource.data.signedUpUserIds;
+          return request.resource.data.label == resource.data.label
+            && request.resource.data.capacity == resource.data.capacity
+            && (
+              (after.size() == before.size() + 1
+                && after.hasAll(before)
+                && after.hasAll([request.auth.uid])
+                && !before.hasAll([request.auth.uid])
+                && after.size() <= resource.data.capacity)
+              || (before.size() == after.size() + 1
+                && before.hasAll(after)
+                && before.hasAll([request.auth.uid])
+                && !after.hasAll([request.auth.uid]))
+            );
+        }
+
+        allow read: if isApprovedMember() || isAdmin();
+        allow create, delete: if isAdmin();
+        allow update: if isAdmin() || (isApprovedMember() && isSelfSignupChange());
+      }
     }
   }
 }

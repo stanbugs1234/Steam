@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../auth/domain/auth_providers.dart';
+import '../../volunteering/presentation/volunteer_slot_section.dart';
 import '../domain/event_providers.dart';
 
 class EventDetailScreen extends ConsumerWidget {
@@ -88,7 +89,11 @@ class EventDetailScreen extends ConsumerWidget {
                 _InfoRow(icon: Icons.volunteer_activism_outlined, text: 'Volunteers needed for this event'),
               ],
               const SizedBox(height: 20),
-              if (event.description.isNotEmpty) Text(event.description, style: Theme.of(context).textTheme.bodyLarge),
+              if (event.description.isNotEmpty) ...[
+                Text(event.description, style: Theme.of(context).textTheme.bodyLarge),
+                const SizedBox(height: 24),
+              ],
+              if (event.needsVolunteers) VolunteerSlotSection(eventId: event.id),
             ],
           );
         },

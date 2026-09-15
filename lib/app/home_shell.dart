@@ -4,9 +4,9 @@ import '../features/directory/presentation/directory_list_screen.dart';
 import '../features/directory/presentation/my_profile_screen.dart';
 import '../features/events/presentation/events_screen.dart';
 import '../features/news/presentation/news_feed_screen.dart';
+import '../features/volunteering/presentation/my_commitments_screen.dart';
 
-/// Bottom-nav shell for approved members. Tabs are added here as each
-/// feature milestone ships (Volunteering).
+/// Bottom-nav shell for approved members.
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
 
@@ -20,6 +20,7 @@ class _HomeShellState extends State<HomeShell> {
   static const _tabs = [
     NewsFeedScreen(),
     EventsScreen(),
+    MyCommitmentsScreen(),
     DirectoryListScreen(),
     MyProfileScreen(),
   ];
@@ -35,6 +36,10 @@ class _HomeShellState extends State<HomeShell> {
           NavigationDestination(icon: Icon(Icons.article_outlined), selectedIcon: Icon(Icons.article), label: 'News'),
           NavigationDestination(
               icon: Icon(Icons.calendar_today_outlined), selectedIcon: Icon(Icons.calendar_today), label: 'Events'),
+          NavigationDestination(
+              icon: Icon(Icons.volunteer_activism_outlined),
+              selectedIcon: Icon(Icons.volunteer_activism),
+              label: 'Volunteer'),
           NavigationDestination(icon: Icon(Icons.people_outline), selectedIcon: Icon(Icons.people), label: 'Directory'),
           NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
         ],

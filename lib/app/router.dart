@@ -14,6 +14,7 @@ import '../features/events/presentation/event_detail_screen.dart';
 import '../features/events/presentation/event_editor_screen.dart';
 import '../features/news/presentation/news_detail_screen.dart';
 import '../features/news/presentation/news_editor_screen.dart';
+import '../features/volunteering/presentation/volunteer_slots_admin_screen.dart';
 import '../models/app_user.dart';
 import 'home_shell.dart';
 
@@ -60,7 +61,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       final adminOnly = loc.startsWith('/admin') ||
           loc == '/news/new' ||
           loc == '/events/new' ||
-          loc.endsWith('/edit');
+          loc.endsWith('/edit') ||
+          loc.endsWith('/slots');
       if (adminOnly && !appUser.isAdmin) {
         return '/home';
       }
@@ -95,6 +97,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/events/:id/edit',
         builder: (context, state) => EventEditorScreen(eventId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/events/:id/slots',
+        builder: (context, state) => VolunteerSlotsAdminScreen(eventId: state.pathParameters['id']!),
       ),
       GoRoute(path: '/admin/approvals', builder: (context, state) => const ApprovalQueueScreen()),
     ],
