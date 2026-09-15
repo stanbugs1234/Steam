@@ -10,6 +10,8 @@ import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/pending_approval_screen.dart';
 import '../features/auth/presentation/signup_screen.dart';
 import '../features/directory/presentation/member_detail_screen.dart';
+import '../features/news/presentation/news_detail_screen.dart';
+import '../features/news/presentation/news_editor_screen.dart';
 import '../models/app_user.dart';
 import 'home_shell.dart';
 
@@ -53,7 +55,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         return '/home';
       }
 
-      if (loc.startsWith('/admin') && !appUser.isAdmin) {
+      final adminOnly = loc.startsWith('/admin') || loc == '/news/new' || loc.endsWith('/edit');
+      if (adminOnly && !appUser.isAdmin) {
         return '/home';
       }
 
@@ -69,6 +72,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/directory/:uid',
         builder: (context, state) => MemberDetailScreen(uid: state.pathParameters['uid']!),
+      ),
+      GoRoute(path: '/news/new', builder: (context, state) => const NewsEditorScreen()),
+      GoRoute(
+        path: '/news/:id',
+        builder: (context, state) => NewsDetailScreen(postId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/news/:id/edit',
+        builder: (context, state) => NewsEditorScreen(postId: state.pathParameters['id']!),
       ),
       GoRoute(path: '/admin/approvals', builder: (context, state) => const ApprovalQueueScreen()),
     ],

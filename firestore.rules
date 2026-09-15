@@ -49,5 +49,10 @@ service cloud.firestore {
 
       allow delete: if isAdmin();
     }
+
+    match /news/{postId} {
+      allow read: if isApprovedMember() || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
   }
 }
