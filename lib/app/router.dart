@@ -10,6 +10,8 @@ import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/pending_approval_screen.dart';
 import '../features/auth/presentation/signup_screen.dart';
 import '../features/directory/presentation/member_detail_screen.dart';
+import '../features/events/presentation/event_detail_screen.dart';
+import '../features/events/presentation/event_editor_screen.dart';
 import '../features/news/presentation/news_detail_screen.dart';
 import '../features/news/presentation/news_editor_screen.dart';
 import '../models/app_user.dart';
@@ -55,7 +57,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         return '/home';
       }
 
-      final adminOnly = loc.startsWith('/admin') || loc == '/news/new' || loc.endsWith('/edit');
+      final adminOnly = loc.startsWith('/admin') ||
+          loc == '/news/new' ||
+          loc == '/events/new' ||
+          loc.endsWith('/edit');
       if (adminOnly && !appUser.isAdmin) {
         return '/home';
       }
@@ -81,6 +86,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/news/:id/edit',
         builder: (context, state) => NewsEditorScreen(postId: state.pathParameters['id']!),
+      ),
+      GoRoute(path: '/events/new', builder: (context, state) => const EventEditorScreen()),
+      GoRoute(
+        path: '/events/:id',
+        builder: (context, state) => EventDetailScreen(eventId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/events/:id/edit',
+        builder: (context, state) => EventEditorScreen(eventId: state.pathParameters['id']!),
       ),
       GoRoute(path: '/admin/approvals', builder: (context, state) => const ApprovalQueueScreen()),
     ],
