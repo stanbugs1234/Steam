@@ -459,6 +459,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
+                  Center(child: Image.asset('assets/icon/icon.png', height: 72)),
+                  const SizedBox(height: 12),
                   Text(
                     'Join the Steam Club',
                     style: Theme.of(context).textTheme.headlineSmall,

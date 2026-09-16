@@ -51,6 +51,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Center(child: Image.asset('assets/icon/icon.png', height: 96)),
+        const SizedBox(height: 16),
         Text('Steam Club', style: Theme.of(context).textTheme.headlineMedium),
         const SizedBox(height: 4),
         Text('Sign in with your phone number', style: Theme.of(context).textTheme.bodyMedium),
@@ -79,6 +81,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Center(child: Image.asset('assets/icon/icon.png', height: 96)),
+          const SizedBox(height: 16),
           Text('Steam Club', style: Theme.of(context).textTheme.headlineMedium),
           const SizedBox(height: 4),
           Text('Sign in to your account', style: Theme.of(context).textTheme.bodyMedium),
