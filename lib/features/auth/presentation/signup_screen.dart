@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../models/app_user.dart';
 import '../domain/auth_providers.dart';
+
+enum _SignupMode { email, phone }
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
@@ -26,6 +31,38 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   bool _submitting = false;
   String? _errorText;
 
+  _SignupMode _mode = _SignupMode.email;
+  bool _modeInitializedFromQuery = false;
+
+  // Phone-signup flow (Step A: number entry, Step B: code entry).
+  final _phoneFormKey = GlobalKey<FormState>();
+  final _phoneNameCtrl = TextEditingController();
+  final _phoneKidNameCtrl = TextEditingController();
+  final _phoneKidGradeCtrl = TextEditingController();
+  final _phoneNumberCtrl = TextEditingController();
+  final _smsCodeCtrl = TextEditingController();
+
+  String? _verificationId;
+  int? _resendToken;
+  String? _e164Phone;
+  bool _codeSent = false;
+  bool _sendingCode = false;
+  bool _verifyingCode = false;
+  int _resendCooldownSeconds = 0;
+  Timer? _cooldownTimer;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_modeInitializedFromQuery) {
+      _modeInitializedFromQuery = true;
+      final queryMode = GoRouterState.of(context).uri.queryParameters['mode'];
+      if (queryMode == 'phone') {
+        setState(() => _mode = _SignupMode.phone);
+      }
+    }
+  }
+
   @override
   void dispose() {
     _nameCtrl.dispose();
@@ -35,6 +72,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     _kidGradeCtrl.dispose();
     _passwordCtrl.dispose();
     _confirmCtrl.dispose();
+    _phoneNameCtrl.dispose();
+    _phoneKidNameCtrl.dispose();
+    _phoneKidGradeCtrl.dispose();
+    _phoneNumberCtrl.dispose();
+    _smsCodeCtrl.dispose();
+    _cooldownTimer?.cancel();
     super.dispose();
   }
 
@@ -75,6 +118,332 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     }
   }
 
+  String _messageForAuthError(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'invalid-phone-number':
+        return "That doesn't look like a valid phone number.";
+      case 'too-many-requests':
+      case 'quota-exceeded':
+        return 'Too many attempts. Please try again later.';
+      case 'invalid-verification-code':
+        return "That code isn't right. Check and try again.";
+      case 'session-expired':
+      case 'code-expired':
+        return 'This code expired — request a new one.';
+      case 'web-context-cancelled':
+        return 'Verification was cancelled. Please try again.';
+      default:
+        return 'Something went wrong. Please try again.';
+    }
+  }
+
+  void _startResendCooldown() {
+    _cooldownTimer?.cancel();
+    setState(() => _resendCooldownSeconds = 30);
+    _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        _resendCooldownSeconds--;
+        if (_resendCooldownSeconds <= 0) timer.cancel();
+      });
+    });
+  }
+
+  Future<void> _createPhoneProfile(User firebaseUser) async {
+    final userRepo = ref.read(userRepositoryProvider);
+    await userRepo.createProfile(AppUser(
+      uid: firebaseUser.uid,
+      name: _phoneNameCtrl.text.trim(),
+      email: '',
+      phone: _e164Phone ?? '',
+      kidName: _phoneKidNameCtrl.text.trim(),
+      kidGrade: _phoneKidGradeCtrl.text.trim(),
+      role: UserRole.member,
+      status: UserStatus.pending,
+    ));
+    // Router redirect will move to /pending-approval automatically.
+  }
+
+  Future<void> _sendCode({int? forceResendingToken}) async {
+    if (!(_phoneFormKey.currentState?.validate() ?? false)) return;
+    setState(() {
+      _sendingCode = true;
+      _errorText = null;
+    });
+
+    final authRepo = ref.read(authRepositoryProvider);
+    _e164Phone = '+1${_phoneNumberCtrl.text.trim()}';
+
+    try {
+      await authRepo.verifyPhoneNumber(
+        phoneNumber: _e164Phone!,
+        forceResendingToken: forceResendingToken,
+        onAutoVerified: (credential) async {
+          try {
+            final userCredential = await authRepo.signInWithPhoneCredential(credential);
+            await _createPhoneProfile(userCredential.user!);
+          } on FirebaseAuthException catch (e) {
+            if (mounted) setState(() => _errorText = _messageForAuthError(e));
+          } finally {
+            if (mounted) setState(() => _sendingCode = false);
+          }
+        },
+        onFailed: (e) {
+          if (mounted) {
+            setState(() {
+              _errorText = _messageForAuthError(e);
+              _sendingCode = false;
+            });
+          }
+        },
+        onCodeSent: (verificationId, resendToken) {
+          if (!mounted) return;
+          setState(() {
+            _verificationId = verificationId;
+            _resendToken = resendToken;
+            _codeSent = true;
+            _sendingCode = false;
+          });
+          _startResendCooldown();
+        },
+        onCodeAutoRetrievalTimeout: (verificationId) {
+          _verificationId = verificationId;
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorText = 'Something went wrong. Please try again.';
+          _sendingCode = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _verifyCode() async {
+    if (_verificationId == null || _smsCodeCtrl.text.trim().length < 6) return;
+    setState(() {
+      _verifyingCode = true;
+      _errorText = null;
+    });
+
+    try {
+      final authRepo = ref.read(authRepositoryProvider);
+      final userCredential = await authRepo.signInWithSmsCode(
+        verificationId: _verificationId!,
+        smsCode: _smsCodeCtrl.text.trim(),
+      );
+      await _createPhoneProfile(userCredential.user!);
+    } on FirebaseAuthException catch (e) {
+      setState(() => _errorText = _messageForAuthError(e));
+    } catch (e) {
+      setState(() => _errorText = 'Something went wrong. Please try again.');
+    } finally {
+      if (mounted) setState(() => _verifyingCode = false);
+    }
+  }
+
+  void _changePhoneNumber() {
+    _cooldownTimer?.cancel();
+    setState(() {
+      _codeSent = false;
+      _verificationId = null;
+      _resendToken = null;
+      _errorText = null;
+      _smsCodeCtrl.clear();
+      _resendCooldownSeconds = 0;
+    });
+  }
+
+  Widget _buildModeToggle() {
+    return SegmentedButton<_SignupMode>(
+      segments: const [
+        ButtonSegment(value: _SignupMode.email, label: Text('Email')),
+        ButtonSegment(value: _SignupMode.phone, label: Text('Phone')),
+      ],
+      selected: {_mode},
+      onSelectionChanged: (selection) {
+        setState(() {
+          _mode = selection.first;
+          _errorText = null;
+        });
+      },
+    );
+  }
+
+  Widget _buildEmailForm() {
+    return Form(
+      key: _formKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextFormField(
+            controller: _nameCtrl,
+            decoration: const InputDecoration(labelText: 'Your full name'),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _emailCtrl,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(labelText: 'Email'),
+            validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _phoneCtrl,
+            keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(labelText: 'Phone'),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _kidNameCtrl,
+            decoration: const InputDecoration(labelText: "Child's name (optional)"),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _kidGradeCtrl,
+            decoration: const InputDecoration(labelText: "Child's grade (optional)"),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _passwordCtrl,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'Password'),
+            validator: (v) => (v == null || v.length < 6) ? 'At least 6 characters' : null,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _confirmCtrl,
+            obscureText: true,
+            decoration: const InputDecoration(labelText: 'Confirm password'),
+            validator: (v) => (v != _passwordCtrl.text) ? 'Passwords do not match' : null,
+          ),
+          if (_errorText != null) ...[
+            const SizedBox(height: 12),
+            Text(_errorText!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          ],
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: _submitting ? null : _submit,
+            child: _submitting
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Request Account'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPhoneNumberStep() {
+    return Form(
+      key: _phoneFormKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextFormField(
+            controller: _phoneNameCtrl,
+            decoration: const InputDecoration(labelText: 'Your full name'),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _phoneKidNameCtrl,
+            decoration: const InputDecoration(labelText: "Child's name (optional)"),
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _phoneKidGradeCtrl,
+            decoration: const InputDecoration(labelText: "Child's grade (optional)"),
+          ),
+          const SizedBox(height: 12),
+          // US-only for now: a fixed +1 prefix keeps this simple for a single
+          // school club. Add a country picker here if that ever changes.
+          TextFormField(
+            controller: _phoneNumberCtrl,
+            keyboardType: TextInputType.phone,
+            inputFormatters: [
+              FilteringTextInputFormatter.digitsOnly,
+              LengthLimitingTextInputFormatter(10),
+            ],
+            decoration: const InputDecoration(labelText: 'Phone number', prefixText: '+1 '),
+            validator: (v) =>
+                (v == null || v.trim().length != 10) ? 'Enter a valid 10-digit phone number' : null,
+          ),
+          if (_errorText != null) ...[
+            const SizedBox(height: 12),
+            Text(_errorText!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          ],
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: _sendingCode ? null : () => _sendCode(),
+            child: _sendingCode
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Send verification code'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCodeEntryStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Enter the code we texted to +1 ${_phoneNumberCtrl.text.trim()}',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 16),
+        TextFormField(
+          controller: _smsCodeCtrl,
+          keyboardType: TextInputType.number,
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(6),
+          ],
+          decoration: const InputDecoration(labelText: '6-digit code'),
+        ),
+        if (_errorText != null) ...[
+          const SizedBox(height: 12),
+          Text(_errorText!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+        ],
+        const SizedBox(height: 20),
+        FilledButton(
+          onPressed: _verifyingCode ? null : _verifyCode,
+          child: _verifyingCode
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Verify'),
+        ),
+        const SizedBox(height: 12),
+        TextButton(
+          onPressed: _resendCooldownSeconds > 0 ? null : () => _sendCode(forceResendingToken: _resendToken),
+          child: Text(_resendCooldownSeconds > 0 ? 'Resend code (${_resendCooldownSeconds}s)' : 'Resend code'),
+        ),
+        TextButton(
+          onPressed: _changePhoneNumber,
+          child: const Text('Change phone number'),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -85,86 +454,35 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             constraints: const BoxConstraints(maxWidth: 480),
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      'Join the Steam Club',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'An admin will review and approve your request.',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    const SizedBox(height: 24),
-                    TextFormField(
-                      controller: _nameCtrl,
-                      decoration: const InputDecoration(labelText: 'Your full name'),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _emailCtrl,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(labelText: 'Email'),
-                      validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _phoneCtrl,
-                      keyboardType: TextInputType.phone,
-                      decoration: const InputDecoration(labelText: 'Phone'),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _kidNameCtrl,
-                      decoration: const InputDecoration(labelText: "Child's name (optional)"),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _kidGradeCtrl,
-                      decoration: const InputDecoration(labelText: "Child's grade (optional)"),
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _passwordCtrl,
-                      obscureText: true,
-                      decoration: const InputDecoration(labelText: 'Password'),
-                      validator: (v) => (v == null || v.length < 6) ? 'At least 6 characters' : null,
-                    ),
-                    const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _confirmCtrl,
-                      obscureText: true,
-                      decoration: const InputDecoration(labelText: 'Confirm password'),
-                      validator: (v) => (v != _passwordCtrl.text) ? 'Passwords do not match' : null,
-                    ),
-                    if (_errorText != null) ...[
-                      const SizedBox(height: 12),
-                      Text(_errorText!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                    ],
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Join the Steam Club',
+                    style: Theme.of(context).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'An admin will review and approve your request.',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 20),
+                  if (!_codeSent) ...[
+                    _buildModeToggle(),
                     const SizedBox(height: 20),
-                    FilledButton(
-                      onPressed: _submitting ? null : _submit,
-                      child: _submitting
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Text('Request Account'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextButton(
-                      onPressed: () => context.go('/login'),
-                      child: const Text('Already have an account? Sign in'),
-                    ),
                   ],
-                ),
+                  if (_mode == _SignupMode.email)
+                    _buildEmailForm()
+                  else if (_codeSent)
+                    _buildCodeEntryStep()
+                  else
+                    _buildPhoneNumberStep(),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: () => context.go('/login'),
+                    child: const Text('Already have an account? Sign in'),
+                  ),
+                ],
               ),
             ),
           ),
