@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:steam_app/features/auth/presentation/login_screen.dart';
 
 void main() {
-  testWidgets('Login screen renders sign-in form', (WidgetTester tester) async {
+  testWidgets('Login screen leads with phone sign-in', (WidgetTester tester) async {
     await tester.pumpWidget(
       const ProviderScope(
         child: MaterialApp(home: LoginScreen()),
@@ -13,6 +13,20 @@ void main() {
     );
 
     expect(find.text('Steam Club'), findsOneWidget);
+    expect(find.text('Continue with phone'), findsOneWidget);
+    expect(find.text('Sign in with email instead'), findsOneWidget);
+  });
+
+  testWidgets('Login screen can switch to email sign-in form', (WidgetTester tester) async {
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MaterialApp(home: LoginScreen()),
+      ),
+    );
+
+    await tester.tap(find.text('Sign in with email instead'));
+    await tester.pump();
+
     expect(find.text('Sign In'), findsOneWidget);
     expect(find.text('Email'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);

@@ -31,7 +31,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   bool _submitting = false;
   String? _errorText;
 
-  _SignupMode _mode = _SignupMode.email;
+  _SignupMode _mode = _SignupMode.phone;
   bool _modeInitializedFromQuery = false;
 
   // Phone-signup flow (Step A: number entry, Step B: code entry).
@@ -57,8 +57,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     if (!_modeInitializedFromQuery) {
       _modeInitializedFromQuery = true;
       final queryMode = GoRouterState.of(context).uri.queryParameters['mode'];
-      if (queryMode == 'phone') {
-        setState(() => _mode = _SignupMode.phone);
+      if (queryMode == 'email') {
+        setState(() => _mode = _SignupMode.email);
       }
     }
   }
@@ -261,8 +261,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   Widget _buildModeToggle() {
     return SegmentedButton<_SignupMode>(
       segments: const [
-        ButtonSegment(value: _SignupMode.email, label: Text('Email')),
         ButtonSegment(value: _SignupMode.phone, label: Text('Phone')),
+        ButtonSegment(value: _SignupMode.email, label: Text('Email')),
       ],
       selected: {_mode},
       onSelectionChanged: (selection) {
