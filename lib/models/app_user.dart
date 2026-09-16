@@ -15,6 +15,7 @@ class AppUser {
   final UserRole role;
   final UserStatus status;
   final DateTime? createdAt;
+  final String? mergedFromId;
 
   const AppUser({
     required this.uid,
@@ -27,6 +28,7 @@ class AppUser {
     required this.role,
     required this.status,
     this.createdAt,
+    this.mergedFromId,
   });
 
   bool get isApproved => status == UserStatus.approved;
@@ -44,6 +46,7 @@ class AppUser {
       role: (data['role'] as String?) == 'admin' ? UserRole.admin : UserRole.member,
       status: _statusFromString(data['status'] as String?),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+      mergedFromId: data['mergedFromId'] as String?,
     );
   }
 
@@ -70,6 +73,7 @@ class AppUser {
       'role': role.name,
       'status': status.name,
       'createdAt': createdAt == null ? FieldValue.serverTimestamp() : Timestamp.fromDate(createdAt!),
+      'mergedFromId': mergedFromId,
     };
   }
 
@@ -93,6 +97,7 @@ class AppUser {
       role: role ?? this.role,
       status: status ?? this.status,
       createdAt: createdAt,
+      mergedFromId: mergedFromId,
     );
   }
 }

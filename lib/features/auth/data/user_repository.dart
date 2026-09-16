@@ -34,6 +34,20 @@ class UserRepository {
         .map((snap) => snap.docs.map((d) => AppUser.fromFirestore(d.id, d.data())).toList());
   }
 
+  Future<AppUser?> findApprovedPlaceholderByPhone(String e164Phone) async {
+    final snap = await _usersRef
+        .where('phone', isEqualTo: e164Phone)
+        .where('status', isEqualTo: UserStatus.approved.name)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    final doc = snap.docs.first;
+    if (!doc.id.startsWith('imported_')) return null;
+    return AppUser.fromFirestore(doc.id, doc.data());
+  }
+
+  Future<void> deletePlaceholder(String docId) => _usersRef.doc(docId).delete();
+
   Stream<List<AppUser>> watchApprovedMembers() {
     return _usersRef
         .where('status', isEqualTo: UserStatus.approved.name)

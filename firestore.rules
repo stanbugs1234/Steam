@@ -29,14 +29,36 @@ service cloud.firestore {
         request.auth.uid == uid
         || isAdmin()
         || (isApprovedMember() && resource.data.status == 'approved')
+        // A phone-verified signup may look up a bulk-imported roster
+        // placeholder matching their own verified phone, to merge into it
+        // instead of creating a disconnected duplicate account.
+        || (
+          uid.matches('imported_.*')
+          && request.auth.token.phone_number != null
+          && request.auth.token.phone_number == resource.data.phone
+        )
       );
 
       // Self-signup always starts as a pending member; role/status can't be
-      // set by the person creating the account.
+      // set by the person creating the account. Exception: a phone-verified
+      // user may create their own doc pre-approved if it explicitly claims a
+      // matching, already-approved import placeholder (verified server-side
+      // via get() against their own verified phone) — role is still forced
+      // to 'member', so merging can never grant admin.
       allow create: if isSignedIn()
         && request.auth.uid == uid
-        && request.resource.data.role == 'member'
-        && request.resource.data.status == 'pending';
+        && (
+          (request.resource.data.role == 'member' && request.resource.data.status == 'pending')
+          || (
+            request.auth.token.phone_number != null
+            && request.resource.data.role == 'member'
+            && request.resource.data.status == 'approved'
+            && request.resource.data.mergedFromId is string
+            && request.resource.data.mergedFromId.matches('imported_.*')
+            && get(/databases/$(database)/documents/users/$(request.resource.data.mergedFromId)).data.phone == request.auth.token.phone_number
+            && get(/databases/$(database)/documents/users/$(request.resource.data.mergedFromId)).data.status == 'approved'
+          )
+        );
 
       // Members may edit their own contact info but not their role/status.
       // Admins may edit anything (used to approve/deny and promote members).
@@ -47,7 +69,15 @@ service cloud.firestore {
         || isAdmin()
       );
 
-      allow delete: if isAdmin();
+      // Admins can delete anyone. A phone-verified user may also delete the
+      // specific import placeholder they just claimed by matching phone,
+      // cleaning up the duplicate once merged into their real account.
+      allow delete: if isAdmin() || (
+        uid.matches('imported_.*')
+        && isSignedIn()
+        && request.auth.token.phone_number != null
+        && request.auth.token.phone_number == resource.data.phone
+      );
     }
 
     match /news/{postId} {

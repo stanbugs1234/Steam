@@ -154,17 +154,42 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
   Future<void> _createPhoneProfile(User firebaseUser) async {
     final userRepo = ref.read(userRepositoryProvider);
-    await userRepo.createProfile(AppUser(
+    final typedKidName = _phoneKidNameCtrl.text.trim();
+    final typedKidGrade = _phoneKidGradeCtrl.text.trim();
+
+    AppUser? placeholder;
+    try {
+      placeholder = await userRepo.findApprovedPlaceholderByPhone(_e164Phone ?? '');
+    } catch (_) {
+      // If the lookup fails for any reason, fall through to a normal
+      // pending signup rather than blocking the user from signing up.
+      placeholder = null;
+    }
+
+    final merged = AppUser(
       uid: firebaseUser.uid,
       name: _phoneNameCtrl.text.trim(),
-      email: '',
+      email: placeholder?.email ?? '',
       phone: _e164Phone ?? '',
-      kidName: _phoneKidNameCtrl.text.trim(),
-      kidGrade: _phoneKidGradeCtrl.text.trim(),
+      kidName: typedKidName.isNotEmpty ? typedKidName : (placeholder?.kidName ?? ''),
+      kidGrade: typedKidGrade.isNotEmpty ? typedKidGrade : (placeholder?.kidGrade ?? ''),
       role: UserRole.member,
-      status: UserStatus.pending,
-    ));
-    // Router redirect will move to /pending-approval automatically.
+      status: placeholder != null ? UserStatus.approved : UserStatus.pending,
+      mergedFromId: placeholder?.uid,
+    );
+
+    await userRepo.createProfile(merged);
+
+    if (placeholder != null) {
+      try {
+        await userRepo.deletePlaceholder(placeholder.uid);
+      } catch (_) {
+        // Non-fatal: the real account was already created successfully;
+        // a leftover placeholder just needs manual cleanup by an admin.
+      }
+    }
+    // Router redirect will move to /pending-approval (or straight to /home
+    // if merged as approved) automatically.
   }
 
   Future<void> _sendCode({int? forceResendingToken}) async {
