@@ -156,12 +156,14 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                         decoration: const InputDecoration(labelText: 'Full name'),
                         validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
                       ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        initialValue: user.email,
-                        enabled: false,
-                        decoration: const InputDecoration(labelText: 'Email'),
-                      ),
+                      if (user.email.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          initialValue: user.email,
+                          enabled: false,
+                          decoration: const InputDecoration(labelText: 'Email'),
+                        ),
+                      ],
                       const SizedBox(height: 12),
                       TextFormField(
                         controller: _phoneCtrl,

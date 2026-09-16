@@ -61,7 +61,7 @@ class _PendingUserTileState extends ConsumerState<_PendingUserTile> {
     return ListTile(
       title: Text(user.name),
       subtitle: Text([
-        user.email,
+        if (user.email.isNotEmpty) user.email,
         if (user.phone.isNotEmpty) user.phone,
         if (user.kidName.isNotEmpty) '${user.kidName}${user.kidGrade.isNotEmpty ? ' (${user.kidGrade})' : ''}',
       ].join(' · ')),
