@@ -21,5 +21,37 @@ class AuthRepository {
     return _auth.sendPasswordResetEmail(email: email);
   }
 
+  Future<void> verifyPhoneNumber({
+    required String phoneNumber,
+    required void Function(PhoneAuthCredential credential) onAutoVerified,
+    required void Function(FirebaseAuthException e) onFailed,
+    required void Function(String verificationId, int? resendToken) onCodeSent,
+    required void Function(String verificationId) onCodeAutoRetrievalTimeout,
+    int? forceResendingToken,
+  }) {
+    return _auth.verifyPhoneNumber(
+      phoneNumber: phoneNumber,
+      verificationCompleted: onAutoVerified,
+      verificationFailed: onFailed,
+      codeSent: onCodeSent,
+      codeAutoRetrievalTimeout: onCodeAutoRetrievalTimeout,
+      forceResendingToken: forceResendingToken,
+      timeout: const Duration(seconds: 60),
+    );
+  }
+
+  Future<UserCredential> signInWithSmsCode({
+    required String verificationId,
+    required String smsCode,
+  }) {
+    return _auth.signInWithCredential(
+      PhoneAuthProvider.credential(verificationId: verificationId, smsCode: smsCode),
+    );
+  }
+
+  Future<UserCredential> signInWithPhoneCredential(PhoneAuthCredential credential) {
+    return _auth.signInWithCredential(credential);
+  }
+
   Future<void> signOut() => _auth.signOut();
 }
