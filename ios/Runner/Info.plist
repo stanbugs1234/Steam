@@ -24,6 +24,15 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<!-- The app has no real deep-linking use (no universal links, no
+	     app_links/uni_links) — the URL scheme below exists only so
+	     Firebase's SDK can redirect back after reCAPTCHA verification.
+	     Since Flutter 3.27, deep linking defaults to enabled, which was
+	     making the engine treat that redirect as a navigation event and
+	     push a duplicate /signup route on top of the in-progress one,
+	     burying the screen waiting for the SMS code. -->
+	<key>FlutterDeepLinkingEnabled</key>
+	<false/>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
