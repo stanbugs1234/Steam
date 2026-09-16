@@ -1,8 +1,13 @@
+import 'dart:io' show Platform;
+
 import 'package:collection/collection.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../models/app_user.dart';
 import '../../auth/domain/auth_providers.dart';
 
 class MemberDetailScreen extends ConsumerWidget {
@@ -10,9 +15,35 @@ class MemberDetailScreen extends ConsumerWidget {
 
   final String uid;
 
+  bool get _supportsContacts => !kIsWeb && (Platform.isIOS || Platform.isAndroid);
+
+  Future<void> _addToContacts(BuildContext context, AppUser member) async {
+    final nameParts = member.name.trim().split(RegExp(r'\s+'));
+    final firstName = nameParts.isNotEmpty ? nameParts.first : member.name;
+    final lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : null;
+
+    final contact = Contact(
+      name: Name(first: firstName, last: lastName),
+      phones: member.phone.isNotEmpty ? [Phone(number: member.phone)] : const [],
+      emails: member.email.isNotEmpty ? [Email(address: member.email)] : const [],
+      organizations: const [Organization(name: 'STEAM Club')],
+    );
+
+    try {
+      await FlutterContacts.native.showCreator(contact: contact);
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open Contacts: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final membersAsync = ref.watch(approvedMembersProvider);
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Member')),
@@ -22,47 +53,164 @@ class MemberDetailScreen extends ConsumerWidget {
           if (member == null) {
             return const Center(child: Text('Member not found.'));
           }
+
           return ListView(
-            padding: const EdgeInsets.all(24),
+            padding: const EdgeInsets.only(bottom: 32),
             children: [
-              Center(
-                child: CircleAvatar(
-                  radius: 48,
-                  backgroundImage: member.photoUrl != null ? NetworkImage(member.photoUrl!) : null,
-                  child: member.photoUrl == null
-                      ? Text(member.name.isNotEmpty ? member.name[0].toUpperCase() : '?', style: const TextStyle(fontSize: 32))
-                      : null,
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 24),
+                color: colorScheme.primaryContainer,
+                child: Column(
+                  children: [
+                    Container(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.15),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: CircleAvatar(
+                        radius: 56,
+                        backgroundColor: colorScheme.surface,
+                        backgroundImage: member.photoUrl != null ? NetworkImage(member.photoUrl!) : null,
+                        child: member.photoUrl == null
+                            ? Text(
+                                member.name.isNotEmpty ? member.name[0].toUpperCase() : '?',
+                                style: TextStyle(fontSize: 40, color: colorScheme.onSurface),
+                              )
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      member.name,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                            color: colorScheme.onPrimaryContainer,
+                          ),
+                    ),
+                    if (member.isAdmin) ...[
+                      const SizedBox(height: 6),
+                      Chip(
+                        label: const Text('Admin'),
+                        visualDensity: VisualDensity.compact,
+                        backgroundColor: colorScheme.primary,
+                        labelStyle: TextStyle(color: colorScheme.onPrimary),
+                      ),
+                    ],
+                    if (_supportsContacts) ...[
+                      const SizedBox(height: 20),
+                      FilledButton.icon(
+                        onPressed: () => _addToContacts(context, member),
+                        icon: const Icon(Icons.person_add_alt_1),
+                        label: const Text('Add to Contacts'),
+                      ),
+                    ],
+                  ],
                 ),
               ),
-              const SizedBox(height: 16),
-              Center(
-                child: Text(member.name, style: Theme.of(context).textTheme.headlineSmall),
-              ),
-              const SizedBox(height: 24),
-              if (member.email.isNotEmpty)
-                ListTile(
-                  leading: const Icon(Icons.email_outlined),
-                  title: Text(member.email),
-                  onTap: () => launchUrl(Uri(scheme: 'mailto', path: member.email)),
+              if (member.email.isNotEmpty || member.phone.isNotEmpty) ...[
+                const SizedBox(height: 20),
+                _SectionCard(
+                  title: 'Contact Info',
+                  children: [
+                    if (member.email.isNotEmpty)
+                      _InfoRow(
+                        icon: Icons.email_outlined,
+                        label: 'Email',
+                        value: member.email,
+                        onTap: () => launchUrl(Uri(scheme: 'mailto', path: member.email)),
+                      ),
+                    if (member.email.isNotEmpty && member.phone.isNotEmpty) const Divider(height: 1),
+                    if (member.phone.isNotEmpty)
+                      _InfoRow(
+                        icon: Icons.phone_outlined,
+                        label: 'Phone',
+                        value: member.phone,
+                        onTap: () => launchUrl(Uri(scheme: 'tel', path: member.phone)),
+                      ),
+                  ],
                 ),
-              if (member.phone.isNotEmpty)
-                ListTile(
-                  leading: const Icon(Icons.phone_outlined),
-                  title: Text(member.phone),
-                  onTap: () => launchUrl(Uri(scheme: 'tel', path: member.phone)),
+              ],
+              if (member.kidName.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                _SectionCard(
+                  title: 'Family',
+                  children: [
+                    _InfoRow(
+                      icon: Icons.child_care_outlined,
+                      label: member.kidGrade.isNotEmpty ? member.kidGrade : 'Child',
+                      value: member.kidName,
+                    ),
+                  ],
                 ),
-              if (member.kidName.isNotEmpty)
-                ListTile(
-                  leading: const Icon(Icons.child_care_outlined),
-                  title: Text(member.kidName),
-                  subtitle: member.kidGrade.isNotEmpty ? Text(member.kidGrade) : null,
-                ),
+              ],
             ],
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => Center(child: Text('Error loading member: $err')),
       ),
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({required this.title, required this.children});
+
+  final String title;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8, left: 4),
+            child: Text(
+              title,
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+          ),
+          Card(
+            margin: EdgeInsets.zero,
+            clipBehavior: Clip.antiAlias,
+            child: Column(children: children),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoRow extends StatelessWidget {
+  const _InfoRow({required this.icon, required this.label, required this.value, this.onTap});
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
+      title: Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
+      subtitle: Text(label),
+      trailing: onTap != null ? const Icon(Icons.chevron_right) : null,
+      onTap: onTap,
     );
   }
 }
