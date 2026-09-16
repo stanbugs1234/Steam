@@ -282,6 +282,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         children: [
           TextFormField(
             controller: _nameCtrl,
+            textCapitalization: TextCapitalization.words,
             decoration: const InputDecoration(labelText: 'Your full name'),
             validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
           ),
@@ -351,6 +352,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         children: [
           TextFormField(
             controller: _phoneNameCtrl,
+            textCapitalization: TextCapitalization.words,
             decoration: const InputDecoration(labelText: 'Your full name'),
             validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
           ),

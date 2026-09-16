@@ -24,6 +24,20 @@
 	<string>????</string>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<!-- Required for Firebase Phone Auth's reCAPTCHA redirect on iOS.
+				     No REVERSED_CLIENT_ID exists (Google Sign-In isn't configured),
+				     so this uses the encoded GOOGLE_APP_ID form Firebase falls back to. -->
+				<string>app-1-968754784411-ios-67757e0a767b081ac4fe3e</string>
+			</array>
+		</dict>
+	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSPhotoLibraryUsageDescription</key>

@@ -153,6 +153,7 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                       const SizedBox(height: 24),
                       TextFormField(
                         controller: _nameCtrl,
+                        textCapitalization: TextCapitalization.words,
                         decoration: const InputDecoration(labelText: 'Full name'),
                         validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
                       ),
