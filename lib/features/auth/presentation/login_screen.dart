@@ -104,6 +104,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       onPressed: () => context.go('/signup'),
                       child: const Text("Don't have an account? Request one"),
                     ),
+                    TextButton(
+                      onPressed: () => context.go('/signup?mode=phone'),
+                      child: const Text('Sign in with phone instead'),
+                    ),
                   ],
                 ),
               ),
