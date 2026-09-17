@@ -16,6 +16,23 @@ final eventSlotsProvider = StreamProvider.family<List<VolunteerSlot>, String>((r
   return ref.watch(volunteerRepositoryProvider).watchSlots(eventId);
 });
 
+class EventVolunteerProgress {
+  final int filled;
+  final int capacity;
+  const EventVolunteerProgress({required this.filled, required this.capacity});
+}
+
+/// Aggregate spot counts across all of an event's volunteer slots, or null
+/// if the event has no slots yet.
+final eventVolunteerProgressProvider = Provider.family<EventVolunteerProgress?, String>((ref, eventId) {
+  final slots = ref.watch(eventSlotsProvider(eventId)).value;
+  if (slots == null || slots.isEmpty) return null;
+  return EventVolunteerProgress(
+    filled: slots.fold(0, (sum, s) => sum + s.signedUpUserIds.length),
+    capacity: slots.fold(0, (sum, s) => sum + s.capacity),
+  );
+});
+
 class MyCommitment {
   final ClubEvent event;
   final VolunteerSlot slot;

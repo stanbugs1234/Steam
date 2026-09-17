@@ -8,6 +8,7 @@ import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_state.dart';
 import '../../../models/club_event.dart';
 import '../../auth/domain/auth_providers.dart';
+import '../../volunteering/domain/volunteer_providers.dart';
 import '../domain/event_providers.dart';
 
 class EventsScreen extends ConsumerStatefulWidget {
@@ -148,21 +149,38 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
   }
 }
 
-class _EventTile extends StatelessWidget {
+class _EventTile extends ConsumerWidget {
   const _EventTile({required this.event});
 
   final ClubEvent event;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final progress = event.needsVolunteers ? ref.watch(eventVolunteerProgressProvider(event.id)) : null;
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Card(
       child: ListTile(
         onTap: () => context.push('/events/${event.id}'),
         leading: CircleIcon(needsVolunteers: event.needsVolunteers),
         title: Text(event.title),
-        subtitle: Text(
-          '${DateFormat.MMMd().add_jm().format(event.startTime)}'
-          '${event.location.isNotEmpty ? ' · ${event.location}' : ''}',
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${DateFormat.MMMd().add_jm().format(event.startTime)}'
+              '${event.location.isNotEmpty ? ' · ${event.location}' : ''}',
+            ),
+            if (progress != null)
+              Text(
+                progress.filled >= progress.capacity
+                    ? 'Volunteers: Full'
+                    : '${progress.filled} of ${progress.capacity} volunteer spots filled',
+                style: TextStyle(
+                  color: progress.filled >= progress.capacity ? colorScheme.error : colorScheme.onSurfaceVariant,
+                ),
+              ),
+          ],
         ),
       ),
     );

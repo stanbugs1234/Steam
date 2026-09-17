@@ -8,7 +8,9 @@ import 'package:intl/intl.dart';
 import '../../../core/widgets/error_state.dart';
 import '../../../core/widgets/section_card.dart';
 import '../../../models/club_event.dart';
+import '../../../models/volunteer_slot.dart';
 import '../../auth/domain/auth_providers.dart';
+import '../../volunteering/domain/volunteer_providers.dart';
 import '../domain/event_providers.dart';
 
 /// Create/edit form for an event. Pass [eventId] to edit an existing event,
@@ -27,12 +29,15 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
   final _titleCtrl = TextEditingController();
   final _descriptionCtrl = TextEditingController();
   final _locationCtrl = TextEditingController();
+  final _volunteersNeededCtrl = TextEditingController(text: '1');
 
   DateTime _start = _roundToNextHour(DateTime.now());
   DateTime _end = _roundToNextHour(DateTime.now()).add(const Duration(hours: 1));
   bool _needsVolunteers = false;
 
   ClubEvent? _loadedFor;
+  List<VolunteerSlot> _existingSlots = const [];
+  bool _slotsSynced = false;
   bool _saving = false;
   String? _error;
 
@@ -54,11 +59,33 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
     _needsVolunteers = event.needsVolunteers;
   }
 
+  // Slots stream in live (they change as members sign up), so only seed the
+  // form from them once — otherwise a signup elsewhere would blow away
+  // whatever the admin is mid-typing.
+  void _syncSlots(List<VolunteerSlot> slots) {
+    if (_slotsSynced) return;
+    _slotsSynced = true;
+    _existingSlots = slots;
+    if (slots.length == 1) {
+      _volunteersNeededCtrl.text = slots.first.capacity.toString();
+    }
+  }
+
+  String? _validateVolunteersNeeded(String? value) {
+    final count = int.tryParse(value?.trim() ?? '');
+    if (count == null || count < 1) return 'Enter a number of at least 1';
+    if (_existingSlots.length == 1 && count < _existingSlots.first.signedUpUserIds.length) {
+      return '${_existingSlots.first.signedUpUserIds.length} people are already signed up';
+    }
+    return null;
+  }
+
   @override
   void dispose() {
     _titleCtrl.dispose();
     _descriptionCtrl.dispose();
     _locationCtrl.dispose();
+    _volunteersNeededCtrl.dispose();
     super.dispose();
   }
 
@@ -103,8 +130,17 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
       _error = null;
     });
     try {
+      final volunteerRepo = ref.read(volunteerRepositoryProvider);
+      // A single inline number only makes sense when there's zero or one
+      // existing slot — an event with multiple named shifts is managed
+      // through the dedicated slots screen instead (see the hidden field
+      // in _buildForm).
+      final writeSingleSlot = _needsVolunteers && _existingSlots.length <= 1;
+      final volunteersNeeded = writeSingleSlot ? int.parse(_volunteersNeededCtrl.text.trim()) : null;
+
       if (_isEditing) {
-        await ref.read(eventRepositoryProvider).updateEvent(widget.eventId!, {
+        final eventId = widget.eventId!;
+        await ref.read(eventRepositoryProvider).updateEvent(eventId, {
           'title': _titleCtrl.text.trim(),
           'description': _descriptionCtrl.text.trim(),
           'location': _locationCtrl.text.trim(),
@@ -112,11 +148,32 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
           'endTime': Timestamp.fromDate(_end),
           'needsVolunteers': _needsVolunteers,
         });
+        if (writeSingleSlot) {
+          if (_existingSlots.isEmpty) {
+            await volunteerRepo.createSlot(
+              eventId,
+              VolunteerSlot(
+                id: volunteerRepo.newSlotId(eventId),
+                label: 'Volunteers',
+                capacity: volunteersNeeded!,
+                signedUpUserIds: const [],
+              ),
+            );
+          } else if (volunteersNeeded != _existingSlots.first.capacity) {
+            await volunteerRepo.updateSlotDetails(
+              eventId,
+              _existingSlots.first.id,
+              label: _existingSlots.first.label,
+              capacity: volunteersNeeded!,
+            );
+          }
+        }
       } else {
         final me = ref.read(currentAppUserProvider).value;
         final repo = ref.read(eventRepositoryProvider);
+        final eventId = repo.newEventId();
         await repo.createEvent(ClubEvent(
-          id: repo.newEventId(),
+          id: eventId,
           title: _titleCtrl.text.trim(),
           description: _descriptionCtrl.text.trim(),
           location: _locationCtrl.text.trim(),
@@ -125,6 +182,17 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
           needsVolunteers: _needsVolunteers,
           createdBy: me?.uid ?? '',
         ));
+        if (writeSingleSlot) {
+          await volunteerRepo.createSlot(
+            eventId,
+            VolunteerSlot(
+              id: volunteerRepo.newSlotId(eventId),
+              label: 'Volunteers',
+              capacity: volunteersNeeded!,
+              signedUpUserIds: const [],
+            ),
+          );
+        }
       }
       if (mounted) context.pop();
     } catch (e) {
@@ -138,6 +206,7 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
   Widget build(BuildContext context) {
     if (_isEditing) {
       final eventsAsync = ref.watch(eventsProvider);
+      final slotsAsync = ref.watch(eventSlotsProvider(widget.eventId!));
       return eventsAsync.when(
         data: (events) {
           final event = events.firstWhereOrNull((e) => e.id == widget.eventId);
@@ -145,7 +214,15 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
             return Scaffold(appBar: AppBar(), body: const Center(child: Text('Event not found.')));
           }
           _syncFromExisting(event);
-          return _buildForm(context);
+          return slotsAsync.when(
+            data: (slots) {
+              _syncSlots(slots);
+              return _buildForm(context);
+            },
+            loading: () => Scaffold(appBar: AppBar(), body: const Center(child: CircularProgressIndicator())),
+            error: (err, _) =>
+                Scaffold(appBar: AppBar(), body: ErrorState(message: 'Something went wrong.', error: err)),
+          );
         },
         loading: () => Scaffold(appBar: AppBar(), body: const Center(child: CircularProgressIndicator())),
         error: (err, _) => Scaffold(appBar: AppBar(), body: ErrorState(message: 'Something went wrong.', error: err)),
@@ -221,6 +298,27 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
                         value: _needsVolunteers,
                         onChanged: (v) => setState(() => _needsVolunteers = v),
                       ),
+                      if (_needsVolunteers) ...[
+                        const Divider(height: 1),
+                        if (_existingSlots.length > 1)
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(16, 12, 16, 16),
+                            child: Text(
+                              'This event already has multiple volunteer slots. '
+                              'Manage their headcounts individually from the event page.',
+                            ),
+                          )
+                        else
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+                            child: TextFormField(
+                              controller: _volunteersNeededCtrl,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(labelText: 'Volunteers needed'),
+                              validator: _validateVolunteersNeeded,
+                            ),
+                          ),
+                      ],
                     ],
                   ),
                   if (_error != null) ...[

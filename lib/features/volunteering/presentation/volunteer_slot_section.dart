@@ -43,8 +43,16 @@ class VolunteerSlotSection extends ConsumerWidget {
             if (slots.isEmpty) {
               return const ListTile(title: Text('No volunteer slots have been set up for this event yet.'));
             }
+            final progress = ref.watch(eventVolunteerProgressProvider(eventId));
             return Column(
               children: [
+                if (slots.length > 1 && progress != null) ...[
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                    child: CapacityBar(filled: progress.filled, capacity: progress.capacity),
+                  ),
+                  const Divider(height: 1),
+                ],
                 for (var i = 0; i < slots.length; i++) ...[
                   if (i > 0) const Divider(height: 1),
                   _SlotTile(
