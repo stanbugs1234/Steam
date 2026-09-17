@@ -7,6 +7,8 @@ import '../../auth/domain/auth_providers.dart';
 
 final _directorySearchProvider = StateProvider<String>((ref) => '');
 
+String _digitsOnly(String s) => s.replaceAll(RegExp(r'\D'), '');
+
 class DirectoryListScreen extends ConsumerStatefulWidget {
   const DirectoryListScreen({super.key});
 
@@ -50,7 +52,7 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
                         onPressed: _clearSearch,
                       )
                     : null,
-                hintText: 'Search by name or child\'s name',
+                hintText: 'Search by name, phone, or child\'s name',
                 border: const OutlineInputBorder(),
                 isDense: true,
               ),
@@ -60,11 +62,13 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
           Expanded(
             child: membersAsync.when(
               data: (members) {
+                final queryDigits = _digitsOnly(query);
                 final filtered = query.isEmpty
                     ? members
                     : members.where((m) {
                         return m.name.toLowerCase().contains(query) ||
-                            m.kids.any((k) => k.name.toLowerCase().contains(query));
+                            m.kids.any((k) => k.name.toLowerCase().contains(query)) ||
+                            (queryDigits.isNotEmpty && _digitsOnly(m.phone).contains(queryDigits));
                       }).toList();
 
                 if (filtered.isEmpty) {
