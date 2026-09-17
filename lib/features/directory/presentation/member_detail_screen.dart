@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../models/app_user.dart';
@@ -115,8 +116,27 @@ class MemberDetailScreen extends ConsumerWidget {
                   ],
                 ),
               ),
-              if (member.email.isNotEmpty || member.phone.isNotEmpty) ...[
+              if (member.createdAt != null) ...[
                 const SizedBox(height: 20),
+                _SectionCard(
+                  title: 'Membership',
+                  children: [
+                    _InfoRow(
+                      icon: Icons.calendar_today_outlined,
+                      label: 'Member since',
+                      value: DateFormat.yMMMM().format(member.createdAt!),
+                    ),
+                    const Divider(height: 1),
+                    _InfoRow(
+                      icon: Icons.hourglass_bottom_outlined,
+                      label: 'Membership length',
+                      value: _formatMembershipDuration(member.createdAt!),
+                    ),
+                  ],
+                ),
+              ],
+              if (member.email.isNotEmpty || member.phone.isNotEmpty) ...[
+                const SizedBox(height: 16),
                 _SectionCard(
                   title: 'Contact Info',
                   children: [
@@ -132,22 +152,25 @@ class MemberDetailScreen extends ConsumerWidget {
                       _InfoRow(
                         icon: Icons.phone_outlined,
                         label: 'Phone',
-                        value: member.phone,
+                        value: _formatPhoneNumber(member.phone),
                         onTap: () => launchUrl(Uri(scheme: 'tel', path: member.phone)),
                       ),
                   ],
                 ),
               ],
-              if (member.kidName.isNotEmpty) ...[
+              if (member.kids.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 _SectionCard(
-                  title: 'Family',
+                  title: member.kids.length == 1 ? '1 Child Enrolled' : '${member.kids.length} Children Enrolled',
                   children: [
-                    _InfoRow(
-                      icon: Icons.child_care_outlined,
-                      label: member.kidGrade.isNotEmpty ? member.kidGrade : 'Child',
-                      value: member.kidName,
-                    ),
+                    for (var i = 0; i < member.kids.length; i++) ...[
+                      if (i > 0) const Divider(height: 1),
+                      _InfoRow(
+                        icon: Icons.child_care_outlined,
+                        label: member.kids[i].grade.isNotEmpty ? member.kids[i].grade : 'Child',
+                        value: member.kids[i].name,
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -159,6 +182,27 @@ class MemberDetailScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+// US-only for now, matching the fixed +1 prefix used at signup.
+String _formatPhoneNumber(String raw) {
+  final digits = raw.replaceAll(RegExp(r'\D'), '');
+  final tenDigits = digits.length == 11 && digits.startsWith('1') ? digits.substring(1) : digits;
+  if (tenDigits.length != 10) return raw;
+  return '(${tenDigits.substring(0, 3)}) ${tenDigits.substring(3, 6)}-${tenDigits.substring(6)}';
+}
+
+String _formatMembershipDuration(DateTime since) {
+  final now = DateTime.now();
+  var months = (now.year - since.year) * 12 + (now.month - since.month);
+  if (now.day < since.day) months -= 1;
+  if (months < 1) return 'New member';
+
+  final years = months ~/ 12;
+  final remainingMonths = months % 12;
+  if (years == 0) return '$remainingMonths month${remainingMonths == 1 ? '' : 's'}';
+  if (remainingMonths == 0) return '$years year${years == 1 ? '' : 's'}';
+  return '$years year${years == 1 ? '' : 's'} $remainingMonths month${remainingMonths == 1 ? '' : 's'}';
 }
 
 class _SectionCard extends StatelessWidget {

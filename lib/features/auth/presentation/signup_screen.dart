@@ -6,10 +6,14 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/children_form_field.dart';
 import '../../../models/app_user.dart';
+import '../../../models/child_info.dart';
 import '../domain/auth_providers.dart';
 
 enum _SignupMode { email, phone }
+
+enum _PhoneStep { number, code, completeProfile }
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
@@ -23,10 +27,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _nameCtrl = TextEditingController();
   final _emailCtrl = TextEditingController();
   final _phoneCtrl = TextEditingController();
-  final _kidNameCtrl = TextEditingController();
-  final _kidGradeCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
+
+  // Shared between the email form and the phone "complete profile" step —
+  // only one of those is ever active in a given session.
+  List<ChildInfo> _kids = [];
 
   bool _submitting = false;
   String? _errorText;
@@ -34,20 +40,22 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   _SignupMode _mode = _SignupMode.phone;
   bool _modeInitializedFromQuery = false;
 
-  // Phone-signup flow (Step A: number entry, Step B: code entry).
+  // Phone flow: Step 1 number entry, Step 2 code entry, Step 3 (new users
+  // only) complete profile.
   final _phoneFormKey = GlobalKey<FormState>();
+  final _completeProfileFormKey = GlobalKey<FormState>();
   final _phoneNameCtrl = TextEditingController();
-  final _phoneKidNameCtrl = TextEditingController();
-  final _phoneKidGradeCtrl = TextEditingController();
   final _phoneNumberCtrl = TextEditingController();
   final _smsCodeCtrl = TextEditingController();
 
   String? _verificationId;
   int? _resendToken;
   String? _e164Phone;
-  bool _codeSent = false;
+  _PhoneStep _phoneStep = _PhoneStep.number;
+  User? _verifiedPhoneUser;
   bool _sendingCode = false;
   bool _verifyingCode = false;
+  bool _completingProfile = false;
   int _resendCooldownSeconds = 0;
   Timer? _cooldownTimer;
 
@@ -68,13 +76,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     _nameCtrl.dispose();
     _emailCtrl.dispose();
     _phoneCtrl.dispose();
-    _kidNameCtrl.dispose();
-    _kidGradeCtrl.dispose();
     _passwordCtrl.dispose();
     _confirmCtrl.dispose();
     _phoneNameCtrl.dispose();
-    _phoneKidNameCtrl.dispose();
-    _phoneKidGradeCtrl.dispose();
     _phoneNumberCtrl.dispose();
     _smsCodeCtrl.dispose();
     _cooldownTimer?.cancel();
@@ -103,8 +107,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         name: _nameCtrl.text.trim(),
         email: _emailCtrl.text.trim(),
         phone: _phoneCtrl.text.trim(),
-        kidName: _kidNameCtrl.text.trim(),
-        kidGrade: _kidGradeCtrl.text.trim(),
+        kids: _kids,
         role: UserRole.member,
         status: UserStatus.pending,
       ));
@@ -152,44 +155,78 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     });
   }
 
-  Future<void> _createPhoneProfile(User firebaseUser) async {
+  /// Called right after a phone number is verified (whether that's a brand
+  /// new sign-up or a returning member signing back in). Deliberately no
+  /// try/catch around the `getUser` lookup: if it fails, let the error
+  /// surface via the caller's own catch block rather than silently treating
+  /// a lookup failure as "new user" and risking a profile overwrite.
+  Future<void> _afterPhoneVerified(User firebaseUser) async {
     final userRepo = ref.read(userRepositoryProvider);
-    final typedKidName = _phoneKidNameCtrl.text.trim();
-    final typedKidGrade = _phoneKidGradeCtrl.text.trim();
+    final existing = await userRepo.getUser(firebaseUser.uid);
+    if (existing != null) {
+      // Returning member — leave their profile untouched and let the router
+      // redirect take them to /home (or /pending-approval / /denied).
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _verifiedPhoneUser = firebaseUser;
+      _phoneStep = _PhoneStep.completeProfile;
+    });
+  }
 
-    AppUser? placeholder;
+  Future<void> _finishPhoneProfile() async {
+    if (!(_completeProfileFormKey.currentState?.validate() ?? false)) return;
+    final firebaseUser = _verifiedPhoneUser;
+    if (firebaseUser == null) return;
+
+    setState(() {
+      _completingProfile = true;
+      _errorText = null;
+    });
+
+    final userRepo = ref.read(userRepositoryProvider);
     try {
-      placeholder = await userRepo.findApprovedPlaceholderByPhone(_e164Phone ?? '');
-    } catch (_) {
-      // If the lookup fails for any reason, fall through to a normal
-      // pending signup rather than blocking the user from signing up.
-      placeholder = null;
-    }
-
-    final merged = AppUser(
-      uid: firebaseUser.uid,
-      name: _phoneNameCtrl.text.trim(),
-      email: placeholder?.email ?? '',
-      phone: _e164Phone ?? '',
-      kidName: typedKidName.isNotEmpty ? typedKidName : (placeholder?.kidName ?? ''),
-      kidGrade: typedKidGrade.isNotEmpty ? typedKidGrade : (placeholder?.kidGrade ?? ''),
-      role: UserRole.member,
-      status: placeholder != null ? UserStatus.approved : UserStatus.pending,
-      mergedFromId: placeholder?.uid,
-    );
-
-    await userRepo.createProfile(merged);
-
-    if (placeholder != null) {
+      AppUser? placeholder;
       try {
-        await userRepo.deletePlaceholder(placeholder.uid);
+        placeholder = await userRepo.findApprovedPlaceholderByPhone(_e164Phone ?? '');
       } catch (_) {
-        // Non-fatal: the real account was already created successfully;
-        // a leftover placeholder just needs manual cleanup by an admin.
+        // If the lookup fails for any reason, fall through to a normal
+        // pending signup rather than blocking the user from signing up.
+        placeholder = null;
       }
+
+      final merged = AppUser(
+        uid: firebaseUser.uid,
+        name: _phoneNameCtrl.text.trim(),
+        email: placeholder?.email ?? '',
+        phone: _e164Phone ?? '',
+        kids: _kids.isNotEmpty ? _kids : (placeholder?.kids ?? const []),
+        role: UserRole.member,
+        status: placeholder != null ? UserStatus.approved : UserStatus.pending,
+        mergedFromId: placeholder?.uid,
+        // Preserve the placeholder's original join date on merge — otherwise
+        // toFirestore() would stamp today's date and lose their real tenure.
+        createdAt: placeholder?.createdAt,
+      );
+
+      await userRepo.createProfile(merged);
+
+      if (placeholder != null) {
+        try {
+          await userRepo.deletePlaceholder(placeholder.uid);
+        } catch (_) {
+          // Non-fatal: the real account was already created successfully;
+          // a leftover placeholder just needs manual cleanup by an admin.
+        }
+      }
+      // Router redirect will move to /pending-approval (or straight to /home
+      // if merged as approved) automatically.
+    } catch (e) {
+      setState(() => _errorText = 'Something went wrong. Please try again.');
+    } finally {
+      if (mounted) setState(() => _completingProfile = false);
     }
-    // Router redirect will move to /pending-approval (or straight to /home
-    // if merged as approved) automatically.
   }
 
   Future<void> _sendCode({int? forceResendingToken}) async {
@@ -209,7 +246,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         onAutoVerified: (credential) async {
           try {
             final userCredential = await authRepo.signInWithPhoneCredential(credential);
-            await _createPhoneProfile(userCredential.user!);
+            await _afterPhoneVerified(userCredential.user!);
           } on FirebaseAuthException catch (e) {
             if (mounted) setState(() => _errorText = _messageForAuthError(e));
           } finally {
@@ -229,7 +266,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           setState(() {
             _verificationId = verificationId;
             _resendToken = resendToken;
-            _codeSent = true;
+            _phoneStep = _PhoneStep.code;
             _sendingCode = false;
           });
           _startResendCooldown();
@@ -261,7 +298,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         verificationId: _verificationId!,
         smsCode: _smsCodeCtrl.text.trim(),
       );
-      await _createPhoneProfile(userCredential.user!);
+      await _afterPhoneVerified(userCredential.user!);
     } on FirebaseAuthException catch (e) {
       setState(() => _errorText = _messageForAuthError(e));
     } catch (e) {
@@ -274,7 +311,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   void _changePhoneNumber() {
     _cooldownTimer?.cancel();
     setState(() {
-      _codeSent = false;
+      _phoneStep = _PhoneStep.number;
       _verificationId = null;
       _resendToken = null;
       _errorText = null;
@@ -326,15 +363,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
           ),
           const SizedBox(height: 12),
-          TextFormField(
-            controller: _kidNameCtrl,
-            decoration: const InputDecoration(labelText: "Child's name (optional)"),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _kidGradeCtrl,
-            decoration: const InputDecoration(labelText: "Child's grade (optional)"),
-          ),
+          ChildrenFormField(initialChildren: _kids, onChanged: (kids) => _kids = kids),
           const SizedBox(height: 12),
           TextFormField(
             controller: _passwordCtrl,
@@ -375,23 +404,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextFormField(
-            controller: _phoneNameCtrl,
-            textCapitalization: TextCapitalization.words,
-            decoration: const InputDecoration(labelText: 'Your full name'),
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _phoneKidNameCtrl,
-            decoration: const InputDecoration(labelText: "Child's name (optional)"),
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _phoneKidGradeCtrl,
-            decoration: const InputDecoration(labelText: "Child's grade (optional)"),
-          ),
-          const SizedBox(height: 12),
           // US-only for now: a fixed +1 prefix keeps this simple for a single
           // school club. Add a country picker here if that ever changes.
           TextFormField(
@@ -471,10 +483,51 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     );
   }
 
+  Widget _buildCompleteProfileStep() {
+    return Form(
+      key: _completeProfileFormKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            "You're verified — just need a couple more details.",
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _phoneNameCtrl,
+            textCapitalization: TextCapitalization.words,
+            decoration: const InputDecoration(labelText: 'Your full name'),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+          ),
+          const SizedBox(height: 12),
+          ChildrenFormField(initialChildren: _kids, onChanged: (kids) => _kids = kids),
+          if (_errorText != null) ...[
+            const SizedBox(height: 12),
+            Text(_errorText!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          ],
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: _completingProfile ? null : _finishPhoneProfile,
+            child: _completingProfile
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Finish'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isRegistering = _mode == _SignupMode.email || _phoneStep == _PhoneStep.completeProfile;
+
     return Scaffold(
-      appBar: AppBar(title: const Text('Request an Account')),
+      appBar: AppBar(title: Text(isRegistering ? 'Request an Account' : 'Sign in')),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -487,22 +540,26 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   Center(child: Image.asset('assets/icon/icon.png', height: 72)),
                   const SizedBox(height: 12),
                   Text(
-                    'Join the Steam Club',
+                    isRegistering ? 'Join the Steam Club' : 'Sign in with your phone number',
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'An admin will review and approve your request.',
+                    isRegistering
+                        ? 'An admin will review and approve your request.'
+                        : "We'll text you a one-time code.",
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 20),
-                  if (!_codeSent) ...[
+                  if (_mode == _SignupMode.email || _phoneStep == _PhoneStep.number) ...[
                     _buildModeToggle(),
                     const SizedBox(height: 20),
                   ],
                   if (_mode == _SignupMode.email)
                     _buildEmailForm()
-                  else if (_codeSent)
+                  else if (_phoneStep == _PhoneStep.completeProfile)
+                    _buildCompleteProfileStep()
+                  else if (_phoneStep == _PhoneStep.code)
                     _buildCodeEntryStep()
                   else
                     _buildPhoneNumberStep(),

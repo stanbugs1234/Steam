@@ -63,7 +63,7 @@ class _PendingUserTileState extends ConsumerState<_PendingUserTile> {
       subtitle: Text([
         if (user.email.isNotEmpty) user.email,
         if (user.phone.isNotEmpty) user.phone,
-        if (user.kidName.isNotEmpty) '${user.kidName}${user.kidGrade.isNotEmpty ? ' (${user.kidGrade})' : ''}',
+        ...user.kids.map((k) => k.grade.isNotEmpty ? '${k.name} (${k.grade})' : k.name),
       ].join(' · ')),
       trailing: _working
           ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))

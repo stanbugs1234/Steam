@@ -60,19 +60,7 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
     super.dispose();
   }
 
-  Future<void> _pickDateTime({required bool isStart}) async {
-    final initial = isStart ? _start : _end;
-    final date = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
-    );
-    if (date == null || !mounted) return;
-    final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(initial));
-    if (time == null) return;
-
-    final combined = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  void _applyChange(bool isStart, DateTime combined) {
     setState(() {
       if (isStart) {
         _start = combined;
@@ -81,6 +69,25 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
         _end = combined;
       }
     });
+  }
+
+  Future<void> _pickDate({required bool isStart}) async {
+    final initial = isStart ? _start : _end;
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+      lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
+    );
+    if (date == null || !mounted) return;
+    _applyChange(isStart, DateTime(date.year, date.month, date.day, initial.hour, initial.minute));
+  }
+
+  Future<void> _pickTime({required bool isStart}) async {
+    final initial = isStart ? _start : _end;
+    final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(initial));
+    if (time == null || !mounted) return;
+    _applyChange(isStart, DateTime(initial.year, initial.month, initial.day, time.hour, time.minute));
   }
 
   Future<void> _save() async {
@@ -146,7 +153,6 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
   }
 
   Widget _buildForm(BuildContext context) {
-    final dateFormat = DateFormat.yMMMEd().add_jm();
     return Scaffold(
       appBar: AppBar(title: Text(_isEditing ? 'Edit Event' : 'New Event')),
       body: Center(
@@ -177,20 +183,9 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
                     maxLines: 10,
                   ),
                   const SizedBox(height: 16),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Starts'),
-                    subtitle: Text(dateFormat.format(_start)),
-                    trailing: const Icon(Icons.edit_calendar_outlined),
-                    onTap: () => _pickDateTime(isStart: true),
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Ends'),
-                    subtitle: Text(dateFormat.format(_end)),
-                    trailing: const Icon(Icons.edit_calendar_outlined),
-                    onTap: () => _pickDateTime(isStart: false),
-                  ),
+                  _buildDateTimeRow(label: 'Starts', value: _start, isStart: true),
+                  const SizedBox(height: 8),
+                  _buildDateTimeRow(label: 'Ends', value: _end, isStart: false),
                   SwitchListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Needs volunteers'),
@@ -213,6 +208,26 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildDateTimeRow({required String label, required DateTime value, required bool isStart}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Expanded(child: Text(label, style: Theme.of(context).textTheme.bodyLarge)),
+          OutlinedButton(
+            onPressed: () => _pickDate(isStart: isStart),
+            child: Text(DateFormat.yMMMd().format(value)),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton(
+            onPressed: () => _pickTime(isStart: isStart),
+            child: Text(DateFormat.jm().format(value)),
+          ),
+        ],
       ),
     );
   }

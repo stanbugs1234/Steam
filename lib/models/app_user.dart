@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'child_info.dart';
+
 enum UserRole { member, admin }
 
 enum UserStatus { pending, approved, denied }
@@ -9,8 +11,7 @@ class AppUser {
   final String name;
   final String email;
   final String phone;
-  final String kidName;
-  final String kidGrade;
+  final List<ChildInfo> kids;
   final String? photoUrl;
   final UserRole role;
   final UserStatus status;
@@ -22,8 +23,7 @@ class AppUser {
     required this.name,
     required this.email,
     required this.phone,
-    required this.kidName,
-    required this.kidGrade,
+    required this.kids,
     this.photoUrl,
     required this.role,
     required this.status,
@@ -33,6 +33,7 @@ class AppUser {
 
   bool get isApproved => status == UserStatus.approved;
   bool get isAdmin => role == UserRole.admin;
+  int get kidCount => kids.length;
 
   factory AppUser.fromFirestore(String uid, Map<String, dynamic> data) {
     return AppUser(
@@ -40,14 +41,24 @@ class AppUser {
       name: data['name'] as String? ?? '',
       email: data['email'] as String? ?? '',
       phone: data['phone'] as String? ?? '',
-      kidName: data['kidName'] as String? ?? '',
-      kidGrade: data['kidGrade'] as String? ?? '',
+      kids: _kidsFromFirestore(data),
       photoUrl: data['photoUrl'] as String?,
       role: (data['role'] as String?) == 'admin' ? UserRole.admin : UserRole.member,
       status: _statusFromString(data['status'] as String?),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       mergedFromId: data['mergedFromId'] as String?,
     );
+  }
+
+  static List<ChildInfo> _kidsFromFirestore(Map<String, dynamic> data) {
+    final kidsRaw = data['kids'];
+    if (kidsRaw is List) {
+      return kidsRaw.map((e) => ChildInfo.fromMap(Map<String, dynamic>.from(e as Map))).toList();
+    }
+    // Legacy docs stored a single child as separate kidName/kidGrade fields.
+    final legacyName = data['kidName'] as String? ?? '';
+    if (legacyName.isEmpty) return const [];
+    return [ChildInfo(name: legacyName, grade: data['kidGrade'] as String? ?? '')];
   }
 
   static UserStatus _statusFromString(String? value) {
@@ -67,8 +78,7 @@ class AppUser {
       'name': name,
       'email': email,
       'phone': phone,
-      'kidName': kidName,
-      'kidGrade': kidGrade,
+      'kids': kids.map((k) => k.toMap()).toList(),
       'photoUrl': photoUrl,
       'role': role.name,
       'status': status.name,
@@ -80,8 +90,7 @@ class AppUser {
   AppUser copyWith({
     String? name,
     String? phone,
-    String? kidName,
-    String? kidGrade,
+    List<ChildInfo>? kids,
     String? photoUrl,
     UserRole? role,
     UserStatus? status,
@@ -91,8 +100,7 @@ class AppUser {
       name: name ?? this.name,
       email: email,
       phone: phone ?? this.phone,
-      kidName: kidName ?? this.kidName,
-      kidGrade: kidGrade ?? this.kidGrade,
+      kids: kids ?? this.kids,
       photoUrl: photoUrl ?? this.photoUrl,
       role: role ?? this.role,
       status: status ?? this.status,

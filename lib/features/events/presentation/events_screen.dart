@@ -16,6 +16,7 @@ class EventsScreen extends ConsumerStatefulWidget {
 }
 
 class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
 
@@ -23,10 +24,29 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
     return events.where((e) => isSameDay(e.startTime, day)).toList();
   }
 
+  bool get _isOnToday => isSameDay(_focusedDay, DateTime.now());
+
+  void _goToToday() {
+    setState(() {
+      _focusedDay = DateTime.now();
+      _selectedDay = DateTime.now();
+    });
+  }
+
   @override
   void initState() {
     super.initState();
     _selectedDay = DateTime.now();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (!_tabController.indexIsChanging) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
   }
 
   @override
@@ -34,29 +54,34 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
     final eventsAsync = ref.watch(eventsProvider);
     final isAdmin = ref.watch(currentAppUserProvider).value?.isAdmin ?? false;
 
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Events'),
-          bottom: const TabBar(tabs: [Tab(text: 'Calendar'), Tab(text: 'Upcoming')]),
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Events'),
+        actions: [
+          if (_tabController.index == 0 && !_isOnToday)
+            TextButton(
+              onPressed: _goToToday,
+              child: const Text('Today'),
+            ),
+        ],
+        bottom: TabBar(controller: _tabController, tabs: const [Tab(text: 'Calendar'), Tab(text: 'Upcoming')]),
+      ),
+      floatingActionButton: isAdmin
+          ? FloatingActionButton(
+              onPressed: () => context.push('/events/new'),
+              child: const Icon(Icons.add),
+            )
+          : null,
+      body: eventsAsync.when(
+        data: (events) => TabBarView(
+          controller: _tabController,
+          children: [
+            _buildCalendarTab(events),
+            _buildUpcomingTab(events),
+          ],
         ),
-        floatingActionButton: isAdmin
-            ? FloatingActionButton(
-                onPressed: () => context.push('/events/new'),
-                child: const Icon(Icons.add),
-              )
-            : null,
-        body: eventsAsync.when(
-          data: (events) => TabBarView(
-            children: [
-              _buildCalendarTab(events),
-              _buildUpcomingTab(events),
-            ],
-          ),
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, _) => Center(child: Text('Error loading events: $err')),
-        ),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, _) => Center(child: Text('Error loading events: $err')),
       ),
     );
   }
@@ -79,7 +104,8 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
               _focusedDay = focusedDay;
             });
           },
-          onPageChanged: (focusedDay) => _focusedDay = focusedDay,
+          onPageChanged: (focusedDay) => setState(() => _focusedDay = focusedDay),
+          headerStyle: const HeaderStyle(formatButtonVisible: false),
           calendarStyle: CalendarStyle(
             markerDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
             selectedDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),

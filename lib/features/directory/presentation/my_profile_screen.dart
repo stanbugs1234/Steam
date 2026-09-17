@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/widgets/children_form_field.dart';
 import '../../../models/app_user.dart';
+import '../../../models/child_info.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../domain/directory_providers.dart';
 
@@ -18,8 +20,7 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameCtrl;
   late final TextEditingController _phoneCtrl;
-  late final TextEditingController _kidNameCtrl;
-  late final TextEditingController _kidGradeCtrl;
+  List<ChildInfo> _kids = [];
 
   AppUser? _loadedFor;
   bool _saving = false;
@@ -31,8 +32,6 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
     super.initState();
     _nameCtrl = TextEditingController();
     _phoneCtrl = TextEditingController();
-    _kidNameCtrl = TextEditingController();
-    _kidGradeCtrl = TextEditingController();
   }
 
   void _syncControllers(AppUser user) {
@@ -40,16 +39,13 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
     _loadedFor = user;
     _nameCtrl.text = user.name;
     _phoneCtrl.text = user.phone;
-    _kidNameCtrl.text = user.kidName;
-    _kidGradeCtrl.text = user.kidGrade;
+    _kids = user.kids;
   }
 
   @override
   void dispose() {
     _nameCtrl.dispose();
     _phoneCtrl.dispose();
-    _kidNameCtrl.dispose();
-    _kidGradeCtrl.dispose();
     super.dispose();
   }
 
@@ -63,8 +59,7 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
       await ref.read(userRepositoryProvider).updateProfile(uid, {
         'name': _nameCtrl.text.trim(),
         'phone': _phoneCtrl.text.trim(),
-        'kidName': _kidNameCtrl.text.trim(),
-        'kidGrade': _kidGradeCtrl.text.trim(),
+        'kids': _kids.map((k) => k.toMap()).toList(),
       });
       setState(() => _message = 'Profile updated.');
     } catch (e) {
@@ -172,15 +167,7 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                         decoration: const InputDecoration(labelText: 'Phone'),
                       ),
                       const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _kidNameCtrl,
-                        decoration: const InputDecoration(labelText: "Child's name"),
-                      ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _kidGradeCtrl,
-                        decoration: const InputDecoration(labelText: "Child's grade"),
-                      ),
+                      ChildrenFormField(initialChildren: _kids, onChanged: (kids) => _kids = kids),
                       if (_message != null) ...[
                         const SizedBox(height: 12),
                         Text(_message!, style: Theme.of(context).textTheme.bodyMedium),
