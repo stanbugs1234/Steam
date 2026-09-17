@@ -70,6 +70,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
       ),
       floatingActionButton: isAdmin
           ? FloatingActionButton(
+              heroTag: 'events_fab',
               onPressed: () => context.push('/events/new'),
               child: const Icon(Icons.add),
             )

@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/utils/phone_format.dart';
+import '../../../core/widgets/admin_badge.dart';
 import '../../../core/widgets/error_state.dart';
 import '../../../core/widgets/section_card.dart';
 import '../../../models/app_user.dart';
@@ -112,7 +113,7 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.15),
+                            color: colorScheme.shadow.withValues(alpha: 0.15),
                             blurRadius: 12,
                             offset: const Offset(0, 4),
                           ),
@@ -125,7 +126,7 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
                         child: member.photoUrl == null
                             ? Text(
                                 member.name.isNotEmpty ? member.name[0].toUpperCase() : '?',
-                                style: TextStyle(fontSize: 40, color: colorScheme.onSurface),
+                                style: Theme.of(context).textTheme.displaySmall?.copyWith(color: colorScheme.onSurface),
                               )
                             : null,
                       ),
@@ -141,12 +142,7 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
                     ),
                     if (member.isAdmin) ...[
                       const SizedBox(height: 6),
-                      Chip(
-                        label: const Text('Admin'),
-                        visualDensity: VisualDensity.compact,
-                        backgroundColor: colorScheme.primary,
-                        labelStyle: TextStyle(color: colorScheme.onPrimary),
-                      ),
+                      const AdminBadge(),
                     ],
                     if (_supportsContacts) ...[
                       const SizedBox(height: 20),
@@ -274,7 +270,7 @@ class _InfoRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return ListTile(
       leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
-      title: Text(value, style: const TextStyle(fontWeight: FontWeight.w500)),
+      title: Text(value, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500)),
       subtitle: Text(label),
       trailing: onTap != null ? const Icon(Icons.chevron_right) : null,
       onTap: onTap,

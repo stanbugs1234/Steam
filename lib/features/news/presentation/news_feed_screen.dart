@@ -20,6 +20,7 @@ class NewsFeedScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('News')),
       floatingActionButton: isAdmin
           ? FloatingActionButton(
+              heroTag: 'news_fab',
               onPressed: () => context.push('/news/new'),
               child: const Icon(Icons.add),
             )

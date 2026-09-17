@@ -146,7 +146,10 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                               radius: 48,
                               backgroundImage: user.photoUrl != null ? NetworkImage(user.photoUrl!) : null,
                               child: user.photoUrl == null
-                                  ? Text(user.name.isNotEmpty ? user.name[0].toUpperCase() : '?', style: const TextStyle(fontSize: 32))
+                                  ? Text(
+                                      user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
+                                      style: Theme.of(context).textTheme.headlineMedium,
+                                    )
                                   : null,
                             ),
                             Positioned(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/admin_badge.dart';
 import '../../../core/widgets/children_form_field.dart' show kGradeOptions;
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_state.dart';
@@ -177,13 +178,7 @@ class _MemberTile extends StatelessWidget {
             Flexible(child: Text(member.name, overflow: TextOverflow.ellipsis)),
             if (member.isAdmin) ...[
               const SizedBox(width: 8),
-              Chip(
-                label: const Text('Admin'),
-                visualDensity: VisualDensity.compact,
-                labelStyle: TextStyle(color: colorScheme.onPrimary, fontSize: 11),
-                backgroundColor: colorScheme.primary,
-                padding: EdgeInsets.zero,
-              ),
+              const AdminBadge(),
             ],
           ],
         ),

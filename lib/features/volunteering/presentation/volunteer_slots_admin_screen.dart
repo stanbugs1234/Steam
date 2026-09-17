@@ -101,6 +101,7 @@ class VolunteerSlotsAdminScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Manage Volunteer Slots')),
       floatingActionButton: FloatingActionButton(
+        heroTag: 'volunteer_slots_fab',
         onPressed: () => _showSlotDialog(context, ref),
         child: const Icon(Icons.add),
       ),

@@ -25,7 +25,7 @@ class ErrorState extends StatelessWidget {
               Text(
                 error.toString(),
                 textAlign: TextAlign.center,
-                style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 12),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
               ),
             ],
           ],
