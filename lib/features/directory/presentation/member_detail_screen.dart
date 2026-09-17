@@ -28,6 +28,7 @@ class MemberDetailScreen extends ConsumerStatefulWidget {
 
 class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
   bool _settingRole = false;
+  bool _settingJoinDate = false;
 
   bool get _supportsContacts => !kIsWeb && (Platform.isIOS || Platform.isAndroid);
 
@@ -83,6 +84,29 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
       }
     } finally {
       if (mounted) setState(() => _settingRole = false);
+    }
+  }
+
+  Future<void> _editJoinDate(AppUser member) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: member.createdAt ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+    );
+    if (picked == null || !mounted) return;
+
+    setState(() => _settingJoinDate = true);
+    try {
+      await ref.read(userRepositoryProvider).setCreatedAt(member.uid, picked);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update join date: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _settingJoinDate = false);
     }
   }
 
@@ -238,6 +262,17 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
                       onChanged: _settingRole || member.uid == viewer.uid
                           ? null
                           : (value) => _setRole(member, value),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      title: const Text('Member since'),
+                      subtitle: Text(
+                        member.createdAt != null ? DateFormat.yMMMd().format(member.createdAt!) : 'Not set',
+                      ),
+                      trailing: _settingJoinDate
+                          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const Icon(Icons.edit_outlined),
+                      onTap: _settingJoinDate ? null : () => _editJoinDate(member),
                     ),
                   ],
                 ),

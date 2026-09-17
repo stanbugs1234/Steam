@@ -132,6 +132,10 @@ class UserRepository {
     return _usersRef.doc(uid).update({'role': role.name});
   }
 
+  Future<void> setCreatedAt(String uid, DateTime date) {
+    return _usersRef.doc(uid).update({'createdAt': Timestamp.fromDate(date)});
+  }
+
   Future<void> updateProfile(String uid, Map<String, dynamic> fields) {
     return _usersRef.doc(uid).update(fields);
   }
