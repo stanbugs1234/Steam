@@ -48,6 +48,74 @@ class UserRepository {
 
   Future<void> deletePlaceholder(String docId) => _usersRef.doc(docId).delete();
 
+  /// Scans approved-status docs (real members and unclaimed `imported_*`
+  /// roster placeholders alike) for one that shares a phone or email with
+  /// [pendingUser], other than themselves. Phone numbers are compared by
+  /// their last 10 digits so formatting differences (e.g. a roster import
+  /// stored as "(555) 123-4567" vs. a signup's "+15551234567") still match.
+  /// Only admins can call this — the security rules only let an admin read
+  /// arbitrary users' docs, which this needs to check everyone, not just the
+  /// pending user's own record.
+  Future<AppUser?> findPossibleDuplicate(AppUser pendingUser) async {
+    final normalizedPhone = _lastTenDigits(pendingUser.phone);
+    final normalizedEmail = pendingUser.email.trim().toLowerCase();
+    if (normalizedPhone.isEmpty && normalizedEmail.isEmpty) return null;
+
+    final snap = await _usersRef.where('status', isEqualTo: UserStatus.approved.name).get();
+    for (final doc in snap.docs) {
+      if (doc.id == pendingUser.uid) continue;
+      final data = doc.data();
+      final candidatePhone = _lastTenDigits(data['phone'] as String? ?? '');
+      final candidateEmail = ((data['email'] as String?) ?? '').trim().toLowerCase();
+      final phoneMatches = normalizedPhone.isNotEmpty && normalizedPhone == candidatePhone;
+      final emailMatches = normalizedEmail.isNotEmpty && normalizedEmail == candidateEmail;
+      if (phoneMatches || emailMatches) {
+        return AppUser.fromFirestore(doc.id, data);
+      }
+    }
+    return null;
+  }
+
+  static String _lastTenDigits(String raw) {
+    final digits = raw.replaceAll(RegExp(r'[^0-9]'), '');
+    return digits.length > 10 ? digits.substring(digits.length - 10) : digits;
+  }
+
+  /// Copies roster data (kids, and email/phone if the new account left them
+  /// blank) from an unclaimed `imported_*` placeholder into [pendingUser]'s
+  /// own doc, approves them, and removes the now-redundant placeholder.
+  ///
+  /// Only ever safe for an unclaimed placeholder: unlike a placeholder, an
+  /// already-claimed member doc is tied to a live Firebase Auth account that
+  /// may still sign in later, so deleting it would silently orphan that
+  /// account on its next sign-in instead of actually merging anything.
+  Future<void> mergeAndApprove(AppUser pendingUser, AppUser placeholder) async {
+    if (!placeholder.uid.startsWith('imported_')) {
+      throw ArgumentError(
+        'mergeAndApprove only supports merging from an unclaimed imported roster placeholder.',
+      );
+    }
+
+    final fields = <String, dynamic>{
+      'email': pendingUser.email.isNotEmpty ? pendingUser.email : placeholder.email,
+      'phone': pendingUser.phone.isNotEmpty ? pendingUser.phone : placeholder.phone,
+      'kids': (pendingUser.kids.isNotEmpty ? pendingUser.kids : placeholder.kids)
+          .map((k) => k.toMap())
+          .toList(),
+      'status': UserStatus.approved.name,
+      'mergedFromId': placeholder.uid,
+    };
+    // Preserve the placeholder's original join date on merge — otherwise the
+    // pending signup's own createdAt would overwrite it and lose their real
+    // tenure with the club.
+    if (placeholder.createdAt != null) {
+      fields['createdAt'] = Timestamp.fromDate(placeholder.createdAt!);
+    }
+
+    await updateProfile(pendingUser.uid, fields);
+    await deletePlaceholder(placeholder.uid);
+  }
+
   Stream<List<AppUser>> watchApprovedMembers() {
     return _usersRef
         .where('status', isEqualTo: UserStatus.approved.name)

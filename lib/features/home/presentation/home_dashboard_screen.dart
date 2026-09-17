@@ -8,9 +8,11 @@ import '../../../core/widgets/section_card.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../../events/domain/event_providers.dart';
 import '../../news/domain/news_providers.dart';
+import '../../volunteering/domain/volunteer_providers.dart';
 
-/// Landing tab: a greeting plus at-a-glance summaries, so opening the app
-/// feels like arriving at the club rather than straight into a raw feed.
+/// Landing tab: a greeting plus at-a-glance, personalized summaries, so
+/// opening the app feels like arriving at the club rather than straight into
+/// a raw feed.
 class HomeDashboardScreen extends ConsumerWidget {
   const HomeDashboardScreen({super.key, required this.onNavigateToTab});
 
@@ -19,9 +21,19 @@ class HomeDashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appUser = ref.watch(currentAppUserProvider).value;
+    final isAdmin = appUser?.isAdmin ?? false;
     final eventsAsync = ref.watch(eventsProvider);
     final newsAsync = ref.watch(newsFeedProvider);
+    final commitmentsAsync = ref.watch(myCommitmentsProvider);
     final now = DateTime.now();
+
+    // Only block the data-dependent sections on a true first load — once a
+    // stream has ever delivered data, later live updates shouldn't re-flash
+    // it. The scaffold, greeting and quick actions never wait on this: a
+    // slow first connection (e.g. a fresh install with no offline cache)
+    // should still show something, not a blank page with no chrome at all.
+    final isInitialLoading =
+        (eventsAsync.isLoading && !eventsAsync.hasValue) || (newsAsync.isLoading && !newsAsync.hasValue);
 
     final firstName = (appUser?.name.trim().isNotEmpty ?? false) ? appUser!.name.trim().split(' ').first : null;
 
@@ -30,7 +42,17 @@ class HomeDashboardScreen extends ConsumerWidget {
         .sortedBy((e) => e.startTime);
     final nextEvent = upcomingEvents.firstOrNull;
     final volunteersNeededCount = upcomingEvents.where((e) => e.needsVolunteers).length;
-    final latestPost = (newsAsync.value ?? const []).firstOrNull;
+
+    final upcomingCommitments = (commitmentsAsync.value ?? const [])
+        .where((c) => c.event.endTime.isAfter(now))
+        .sortedBy((c) => c.event.startTime);
+
+    // Only admins are allowed to query pending users — security rules deny
+    // this query outright for everyone else, so only watch it when it can
+    // actually succeed.
+    final pendingCount = isAdmin ? (ref.watch(pendingUsersProvider).value?.length ?? 0) : 0;
+
+    final recentPosts = (newsAsync.value ?? const []).take(3).toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Home')),
@@ -49,6 +71,14 @@ class HomeDashboardScreen extends ConsumerWidget {
           const SizedBox(height: 20),
           Row(
             children: [
+              Expanded(
+                child: _QuickAction(
+                  icon: Icons.article_outlined,
+                  label: 'News',
+                  onTap: () => onNavigateToTab(1),
+                ),
+              ),
+              const SizedBox(width: 12),
               Expanded(
                 child: _QuickAction(
                   icon: Icons.calendar_today_outlined,
@@ -74,64 +104,119 @@ class HomeDashboardScreen extends ConsumerWidget {
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          if (nextEvent != null)
-            SectionCard(
-              title: 'Next Event',
-              icon: Icons.calendar_today_outlined,
-              padding: EdgeInsets.zero,
-              children: [
-                ListTile(
-                  title: Text(nextEvent.title),
-                  subtitle: Text(DateFormat.MMMEd().add_jm().format(nextEvent.startTime)),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push('/events/${nextEvent.id}'),
-                ),
-              ],
+          if (isInitialLoading)
+            const Padding(
+              padding: EdgeInsets.only(top: 48),
+              child: Center(child: CircularProgressIndicator()),
             )
-          else
-            SectionCard(
-              title: 'Next Event',
-              icon: Icons.calendar_today_outlined,
-              padding: EdgeInsets.zero,
-              children: const [
-                ListTile(title: Text('No upcoming events right now.')),
-              ],
-            ),
-          if (volunteersNeededCount > 0) ...[
-            const SizedBox(height: 16),
-            SectionCard(
-              title: 'Volunteers Needed',
-              icon: Icons.volunteer_activism_outlined,
-              padding: EdgeInsets.zero,
-              children: [
-                ListTile(
-                  title: Text(
-                    volunteersNeededCount == 1
-                        ? '1 upcoming event needs volunteers'
-                        : '$volunteersNeededCount upcoming events need volunteers',
+          else ...[
+            if (isAdmin && pendingCount > 0) ...[
+              const SizedBox(height: 24),
+              SectionCard(
+                title: 'Pending Approvals',
+                icon: Icons.fact_check_outlined,
+                padding: EdgeInsets.zero,
+                children: [
+                  ListTile(
+                    title: Text(
+                      pendingCount == 1
+                          ? '1 request waiting for review'
+                          : '$pendingCount requests waiting for review',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/admin/approvals'),
                   ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => onNavigateToTab(2),
+                ],
+              ),
+            ],
+            if (upcomingCommitments.isNotEmpty) ...[
+              const SizedBox(height: 24),
+              SectionCard(
+                title: 'Your Volunteer Shifts',
+                icon: Icons.event_available_outlined,
+                padding: EdgeInsets.zero,
+                children: [
+                  for (var i = 0; i < upcomingCommitments.length && i < 3; i++) ...[
+                    if (i > 0) const Divider(height: 1),
+                    ListTile(
+                      title: Text(upcomingCommitments[i].event.title),
+                      subtitle: Text(
+                        '${upcomingCommitments[i].slot.label} · '
+                        '${DateFormat.MMMEd().add_jm().format(upcomingCommitments[i].event.startTime)}',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => context.push('/events/${upcomingCommitments[i].event.id}'),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+            const SizedBox(height: 24),
+            if (nextEvent != null)
+              SectionCard(
+                title: 'Next Event',
+                icon: Icons.calendar_today_outlined,
+                padding: EdgeInsets.zero,
+                children: [
+                  ListTile(
+                    title: Text(nextEvent.title),
+                    subtitle: Text(DateFormat.MMMEd().add_jm().format(nextEvent.startTime)),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/events/${nextEvent.id}'),
+                  ),
+                ],
+              )
+            else
+              SectionCard(
+                title: 'Next Event',
+                icon: Icons.calendar_today_outlined,
+                padding: EdgeInsets.zero,
+                children: const [
+                  ListTile(title: Text('No upcoming events right now.')),
+                ],
+              ),
+            if (volunteersNeededCount > 0) ...[
+              const SizedBox(height: 16),
+              SectionCard(
+                title: 'Volunteers Needed',
+                icon: Icons.volunteer_activism_outlined,
+                padding: EdgeInsets.zero,
+                children: [
+                  ListTile(
+                    title: Text(
+                      volunteersNeededCount == 1
+                          ? '1 upcoming event could use your help'
+                          : '$volunteersNeededCount upcoming events could use your help',
+                    ),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => onNavigateToTab(2),
+                  ),
+                ],
+              ),
+            ],
+            if (recentPosts.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              SectionCard(
+                title: 'Latest News',
+                icon: Icons.article_outlined,
+                padding: EdgeInsets.zero,
+                trailing: TextButton(
+                  onPressed: () => onNavigateToTab(1),
+                  child: const Text('See all'),
                 ),
-              ],
-            ),
-          ],
-          if (latestPost != null) ...[
-            const SizedBox(height: 16),
-            SectionCard(
-              title: 'Latest News',
-              icon: Icons.article_outlined,
-              padding: EdgeInsets.zero,
-              children: [
-                ListTile(
-                  title: Text(latestPost.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                  subtitle: Text(latestPost.body, maxLines: 2, overflow: TextOverflow.ellipsis),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => context.push('/news/${latestPost.id}'),
-                ),
-              ],
-            ),
+                children: [
+                  for (var i = 0; i < recentPosts.length; i++) ...[
+                    if (i > 0) const Divider(height: 1),
+                    ListTile(
+                      title: Text(recentPosts[i].title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                      subtitle: Text(recentPosts[i].body, maxLines: 2, overflow: TextOverflow.ellipsis),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => context.push('/news/${recentPosts[i].id}'),
+                    ),
+                  ],
+                ],
+              ),
+            ],
           ],
         ],
       ),

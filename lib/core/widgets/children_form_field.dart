@@ -2,6 +2,21 @@ import 'package:flutter/material.dart';
 
 import '../../models/child_info.dart';
 
+/// Grade levels offered by the school, youngest to oldest.
+const List<String> kGradeOptions = [
+  'Pre-K 2',
+  'Pre-K 3',
+  'Pre-K 4',
+  'Kindergarten',
+  '1st Grade',
+  '2nd Grade',
+  '3rd Grade',
+  '4th Grade',
+  '5th Grade',
+  '6th Grade',
+  '7th Grade',
+];
+
 /// Editable list of children (name + grade rows) with add/remove controls.
 /// Reused across the signup and profile-edit forms so a member can register
 /// more than one child at the school.
@@ -15,30 +30,36 @@ class ChildrenFormField extends StatefulWidget {
   State<ChildrenFormField> createState() => _ChildrenFormFieldState();
 }
 
-class _ChildRowControllers {
-  _ChildRowControllers({String name = '', String grade = ''})
+class _ChildRow {
+  _ChildRow({String name = '', String grade = ''})
       : nameCtrl = TextEditingController(text: name),
-        gradeCtrl = TextEditingController(text: grade);
+        grade = grade.trim().isEmpty ? null : grade.trim();
 
   final TextEditingController nameCtrl;
-  final TextEditingController gradeCtrl;
+  String? grade;
 
-  ChildInfo toChildInfo() => ChildInfo(name: nameCtrl.text.trim(), grade: gradeCtrl.text.trim());
+  /// The dropdown's item list must contain the current value exactly once.
+  /// A grade typed in before this became a dropdown (or anything that
+  /// otherwise doesn't match one of the standard options) is kept as an
+  /// extra selectable entry instead of silently discarded.
+  List<String> get gradeOptions =>
+      grade != null && !kGradeOptions.contains(grade) ? [grade!, ...kGradeOptions] : kGradeOptions;
+
+  ChildInfo toChildInfo() => ChildInfo(name: nameCtrl.text.trim(), grade: grade ?? '');
 
   void dispose() {
     nameCtrl.dispose();
-    gradeCtrl.dispose();
   }
 }
 
 class _ChildrenFormFieldState extends State<ChildrenFormField> {
-  final List<_ChildRowControllers> _rows = [];
+  final List<_ChildRow> _rows = [];
 
   @override
   void initState() {
     super.initState();
     for (final child in widget.initialChildren) {
-      _rows.add(_ChildRowControllers(name: child.name, grade: child.grade));
+      _rows.add(_ChildRow(name: child.name, grade: child.grade));
     }
   }
 
@@ -55,7 +76,7 @@ class _ChildrenFormFieldState extends State<ChildrenFormField> {
   }
 
   void _addRow() {
-    setState(() => _rows.add(_ChildRowControllers()));
+    setState(() => _rows.add(_ChildRow()));
     _notify();
   }
 
@@ -88,10 +109,18 @@ class _ChildrenFormFieldState extends State<ChildrenFormField> {
               const SizedBox(width: 8),
               Expanded(
                 flex: 2,
-                child: TextFormField(
-                  controller: _rows[i].gradeCtrl,
+                child: DropdownButtonFormField<String>(
+                  initialValue: _rows[i].grade,
                   decoration: const InputDecoration(labelText: 'Grade'),
-                  onChanged: (_) => _notify(),
+                  isExpanded: true,
+                  items: [
+                    for (final option in _rows[i].gradeOptions)
+                      DropdownMenuItem(value: option, child: Text(option, overflow: TextOverflow.ellipsis)),
+                  ],
+                  onChanged: (value) {
+                    setState(() => _rows[i].grade = value);
+                    _notify();
+                  },
                 ),
               ),
               IconButton(
