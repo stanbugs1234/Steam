@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/widgets/error_state.dart';
+import '../../../core/widgets/section_card.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../../volunteering/presentation/volunteer_slot_section.dart';
 import '../domain/event_providers.dart';
@@ -75,30 +77,52 @@ class EventDetailScreen extends ConsumerWidget {
                   '${DateFormat.yMMMEd().add_jm().format(event.endTime)}';
 
           return ListView(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.symmetric(vertical: 20),
             children: [
-              Text(event.title, style: Theme.of(context).textTheme.headlineSmall),
-              const SizedBox(height: 12),
-              _InfoRow(icon: Icons.schedule_outlined, text: timeRange),
-              if (event.location.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                _InfoRow(icon: Icons.place_outlined, text: event.location),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: Text(event.title, style: Theme.of(context).textTheme.headlineSmall),
+              ),
+              const SizedBox(height: 16),
+              SectionCard(
+                title: 'Details',
+                icon: Icons.info_outline,
+                padding: EdgeInsets.zero,
+                children: [
+                  _InfoRow(icon: Icons.schedule_outlined, text: timeRange),
+                  if (event.location.isNotEmpty) ...[
+                    const Divider(height: 1),
+                    _InfoRow(icon: Icons.place_outlined, text: event.location),
+                  ],
+                  if (event.needsVolunteers) ...[
+                    const Divider(height: 1),
+                    _InfoRow(icon: Icons.volunteer_activism_outlined, text: 'Volunteers needed for this event'),
+                  ],
+                ],
+              ),
+              if (event.description.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                SectionCard(
+                  title: 'Description',
+                  icon: Icons.notes_outlined,
+                  padding: EdgeInsets.zero,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(event.description, style: Theme.of(context).textTheme.bodyLarge),
+                    ),
+                  ],
+                ),
               ],
               if (event.needsVolunteers) ...[
-                const SizedBox(height: 8),
-                _InfoRow(icon: Icons.volunteer_activism_outlined, text: 'Volunteers needed for this event'),
+                const SizedBox(height: 16),
+                VolunteerSlotSection(eventId: event.id),
               ],
-              const SizedBox(height: 20),
-              if (event.description.isNotEmpty) ...[
-                Text(event.description, style: Theme.of(context).textTheme.bodyLarge),
-                const SizedBox(height: 24),
-              ],
-              if (event.needsVolunteers) VolunteerSlotSection(eventId: event.id),
             ],
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Error loading event: $err')),
+        error: (err, _) => ErrorState(message: "Couldn't load this event.", error: err),
       ),
     );
   }
@@ -112,13 +136,16 @@ class _InfoRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
-        const SizedBox(width: 8),
-        Expanded(child: Text(text)),
-      ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: Theme.of(context).colorScheme.onSurfaceVariant),
+          const SizedBox(width: 8),
+          Expanded(child: Text(text)),
+        ],
+      ),
     );
   }
 }

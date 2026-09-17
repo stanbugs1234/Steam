@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/error_state.dart';
 import '../../../models/app_user.dart';
 import '../../auth/domain/auth_providers.dart';
 
@@ -16,11 +18,12 @@ class ApprovalQueueScreen extends ConsumerWidget {
       body: pendingAsync.when(
         data: (users) {
           if (users.isEmpty) {
-            return const Center(child: Text('No pending requests.'));
+            return const EmptyState(icon: Icons.fact_check_outlined, message: 'No pending requests.');
           }
           return ListView.separated(
+            padding: const EdgeInsets.all(12),
             itemCount: users.length,
-            separatorBuilder: (context, index) => const Divider(height: 1),
+            separatorBuilder: (context, index) => const SizedBox(height: 8),
             itemBuilder: (context, index) {
               final user = users[index];
               return _PendingUserTile(user: user);
@@ -28,7 +31,7 @@ class ApprovalQueueScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Error loading requests: $err')),
+        error: (err, _) => ErrorState(message: "Couldn't load pending requests.", error: err),
       ),
     );
   }
@@ -58,30 +61,35 @@ class _PendingUserTileState extends ConsumerState<_PendingUserTile> {
   @override
   Widget build(BuildContext context) {
     final user = widget.user;
-    return ListTile(
-      title: Text(user.name),
-      subtitle: Text([
-        if (user.email.isNotEmpty) user.email,
-        if (user.phone.isNotEmpty) user.phone,
-        ...user.kids.map((k) => k.grade.isNotEmpty ? '${k.name} (${k.grade})' : k.name),
-      ].join(' · ')),
-      trailing: _working
-          ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-          : Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.check_circle, color: Colors.green),
-                  tooltip: 'Approve',
-                  onPressed: () => _respond(UserStatus.approved),
-                ),
-                IconButton(
-                  icon: Icon(Icons.cancel, color: Theme.of(context).colorScheme.error),
-                  tooltip: 'Deny',
-                  onPressed: () => _respond(UserStatus.denied),
-                ),
-              ],
-            ),
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        title: Text(user.name),
+        subtitle: Text([
+          if (user.email.isNotEmpty) user.email,
+          if (user.phone.isNotEmpty) user.phone,
+          ...user.kids.map((k) => k.grade.isNotEmpty ? '${k.name} (${k.grade})' : k.name),
+        ].join(' · ')),
+        trailing: _working
+            ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
+            : Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: Icon(Icons.check_circle, color: Theme.of(context).colorScheme.primary),
+                    tooltip: 'Approve',
+                    onPressed: () => _respond(UserStatus.approved),
+                  ),
+                  IconButton(
+                    icon: Icon(Icons.cancel, color: Theme.of(context).colorScheme.error),
+                    tooltip: 'Deny',
+                    onPressed: () => _respond(UserStatus.denied),
+                  ),
+                ],
+              ),
+      ),
     );
   }
 }

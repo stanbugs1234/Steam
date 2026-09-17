@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/error_state.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../domain/volunteer_providers.dart';
 
@@ -19,14 +21,9 @@ class MyCommitmentsScreen extends ConsumerWidget {
       body: commitmentsAsync.when(
         data: (commitments) {
           if (commitments.isEmpty) {
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(24),
-                child: Text(
-                  "You haven't signed up to volunteer for anything yet.\nCheck the Events tab for opportunities.",
-                  textAlign: TextAlign.center,
-                ),
-              ),
+            return const EmptyState(
+              icon: Icons.volunteer_activism_outlined,
+              message: "You haven't signed up to volunteer for anything yet.\nCheck the Events tab for opportunities.",
             );
           }
           return ListView.separated(
@@ -53,7 +50,7 @@ class MyCommitmentsScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Error loading your commitments: $err')),
+        error: (err, _) => ErrorState(message: "Couldn't load your commitments.", error: err),
       ),
     );
   }

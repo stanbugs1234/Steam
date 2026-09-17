@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/error_state.dart';
 import '../../../models/club_event.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../domain/event_providers.dart';
@@ -81,7 +83,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
           ],
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Error loading events: $err')),
+        error: (err, _) => ErrorState(message: "Couldn't load events right now.", error: err),
       ),
     );
   }
@@ -116,7 +118,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
         const Divider(height: 1),
         Expanded(
           child: dayEvents.isEmpty
-              ? const Center(child: Text('No events on this day.'))
+              ? const EmptyState(icon: Icons.event_busy_outlined, message: 'No events on this day.')
               : ListView.separated(
                   padding: const EdgeInsets.all(12),
                   itemCount: dayEvents.length,
@@ -134,7 +136,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
       ..sort((a, b) => a.startTime.compareTo(b.startTime));
 
     if (upcoming.isEmpty) {
-      return const Center(child: Text('No upcoming events.'));
+      return const EmptyState(icon: Icons.event_busy_outlined, message: 'No upcoming events.');
     }
     return ListView.separated(
       padding: const EdgeInsets.all(12),

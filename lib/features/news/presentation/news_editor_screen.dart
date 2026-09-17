@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/widgets/error_state.dart';
 import '../../../models/news_post.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../domain/news_providers.dart';
@@ -111,7 +112,7 @@ class _NewsEditorScreenState extends ConsumerState<NewsEditorScreen> {
           return _buildForm(context);
         },
         loading: () => Scaffold(appBar: AppBar(), body: const Center(child: CircularProgressIndicator())),
-        error: (err, _) => Scaffold(appBar: AppBar(), body: Center(child: Text('Error: $err'))),
+        error: (err, _) => Scaffold(appBar: AppBar(), body: ErrorState(message: 'Something went wrong.', error: err)),
       );
     }
     return _buildForm(context);

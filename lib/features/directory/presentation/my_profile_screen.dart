@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/widgets/children_form_field.dart';
+import '../../../core/widgets/error_state.dart';
+import '../../../core/widgets/section_card.dart';
 import '../../../models/app_user.dart';
 import '../../../models/child_info.dart';
 import '../../auth/domain/auth_providers.dart';
@@ -130,14 +132,18 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                               right: 0,
                               child: CircleAvatar(
                                 radius: 16,
+                                backgroundColor: Theme.of(context).colorScheme.primary,
                                 child: _uploadingPhoto
-                                    ? const Padding(
-                                        padding: EdgeInsets.all(4),
-                                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                    ? Padding(
+                                        padding: const EdgeInsets.all(4),
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Theme.of(context).colorScheme.onPrimary,
+                                        ),
                                       )
                                     : IconButton(
                                         icon: const Icon(Icons.camera_alt, size: 16),
-                                        color: Colors.white,
+                                        color: Theme.of(context).colorScheme.onPrimary,
                                         onPressed: () => _pickAndUploadPhoto(user.uid),
                                       ),
                               ),
@@ -146,30 +152,53 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      TextFormField(
-                        controller: _nameCtrl,
-                        textCapitalization: TextCapitalization.words,
-                        decoration: const InputDecoration(labelText: 'Full name'),
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                      SectionCard(
+                        title: 'Your Info',
+                        icon: Icons.person_outline,
+                        padding: EdgeInsets.zero,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                            child: TextFormField(
+                              controller: _nameCtrl,
+                              textCapitalization: TextCapitalization.words,
+                              decoration: const InputDecoration(labelText: 'Full name'),
+                              validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                            ),
+                          ),
+                          if (user.email.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                              child: TextFormField(
+                                initialValue: user.email,
+                                enabled: false,
+                                decoration: const InputDecoration(labelText: 'Email'),
+                              ),
+                            ),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                            child: TextFormField(
+                              controller: _phoneCtrl,
+                              keyboardType: TextInputType.phone,
+                              decoration: const InputDecoration(labelText: 'Phone'),
+                            ),
+                          ),
+                        ],
                       ),
-                      if (user.email.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          initialValue: user.email,
-                          enabled: false,
-                          decoration: const InputDecoration(labelText: 'Email'),
-                        ),
-                      ],
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        controller: _phoneCtrl,
-                        keyboardType: TextInputType.phone,
-                        decoration: const InputDecoration(labelText: 'Phone'),
+                      const SizedBox(height: 16),
+                      SectionCard(
+                        title: 'Family',
+                        icon: Icons.child_care_outlined,
+                        padding: EdgeInsets.zero,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: ChildrenFormField(initialChildren: _kids, onChanged: (kids) => _kids = kids),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 12),
-                      ChildrenFormField(initialChildren: _kids, onChanged: (kids) => _kids = kids),
                       if (_message != null) ...[
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 16),
                         Text(_message!, style: Theme.of(context).textTheme.bodyMedium),
                       ],
                       const SizedBox(height: 20),
@@ -180,13 +209,19 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                             : const Text('Save Changes'),
                       ),
                       if (user.isAdmin) ...[
-                        const SizedBox(height: 24),
-                        const Divider(),
-                        const SizedBox(height: 12),
-                        OutlinedButton.icon(
-                          onPressed: () => context.push('/admin/approvals'),
-                          icon: const Icon(Icons.fact_check_outlined),
-                          label: const Text('Review Pending Approvals'),
+                        const SizedBox(height: 16),
+                        SectionCard(
+                          title: 'Admin',
+                          icon: Icons.admin_panel_settings_outlined,
+                          padding: EdgeInsets.zero,
+                          children: [
+                            ListTile(
+                              leading: const Icon(Icons.fact_check_outlined),
+                              title: const Text('Review Pending Approvals'),
+                              trailing: const Icon(Icons.chevron_right),
+                              onTap: () => context.push('/admin/approvals'),
+                            ),
+                          ],
                         ),
                       ],
                     ],
@@ -197,7 +232,7 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Error loading profile: $err')),
+        error: (err, _) => ErrorState(message: "Couldn't load your profile.", error: err),
       ),
     );
   }

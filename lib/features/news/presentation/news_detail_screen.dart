@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/widgets/error_state.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../domain/news_providers.dart';
 
@@ -92,7 +93,7 @@ class NewsDetailScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Error loading post: $err')),
+        error: (err, _) => ErrorState(message: "Couldn't load this post.", error: err),
       ),
     );
   }

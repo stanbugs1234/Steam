@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/error_state.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../domain/news_providers.dart';
 
@@ -25,7 +27,7 @@ class NewsFeedScreen extends ConsumerWidget {
       body: feedAsync.when(
         data: (posts) {
           if (posts.isEmpty) {
-            return const Center(child: Text('No news yet.'));
+            return const EmptyState(icon: Icons.article_outlined, message: 'No news yet.');
           }
           return ListView.separated(
             padding: const EdgeInsets.all(12),
@@ -40,11 +42,19 @@ class NewsFeedScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (post.imageUrl != null)
-                        AspectRatio(
-                          aspectRatio: 16 / 9,
-                          child: Image.network(post.imageUrl!, fit: BoxFit.cover),
-                        ),
+                      AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: post.imageUrl != null
+                            ? Image.network(post.imageUrl!, fit: BoxFit.cover)
+                            : Container(
+                                color: Theme.of(context).colorScheme.secondaryContainer,
+                                child: Icon(
+                                  Icons.article_outlined,
+                                  size: 40,
+                                  color: Theme.of(context).colorScheme.onSecondaryContainer,
+                                ),
+                              ),
+                      ),
                       Padding(
                         padding: const EdgeInsets.all(16),
                         child: Column(
@@ -77,7 +87,7 @@ class NewsFeedScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Error loading news: $err')),
+        error: (err, _) => ErrorState(message: "Couldn't load news right now.", error: err),
       ),
     );
   }

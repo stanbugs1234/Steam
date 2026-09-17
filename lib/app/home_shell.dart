@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../features/directory/presentation/directory_list_screen.dart';
 import '../features/directory/presentation/my_profile_screen.dart';
 import '../features/events/presentation/events_screen.dart';
+import '../features/home/presentation/home_dashboard_screen.dart';
 import '../features/news/presentation/news_feed_screen.dart';
 import '../features/volunteering/presentation/my_commitments_screen.dart';
 
@@ -17,12 +18,15 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
 
-  static const _tabs = [
-    NewsFeedScreen(),
-    EventsScreen(),
-    MyCommitmentsScreen(),
-    DirectoryListScreen(),
-    MyProfileScreen(),
+  void _navigateToTab(int index) => setState(() => _index = index);
+
+  late final _tabs = [
+    HomeDashboardScreen(onNavigateToTab: _navigateToTab),
+    const NewsFeedScreen(),
+    const EventsScreen(),
+    const MyCommitmentsScreen(),
+    const DirectoryListScreen(),
+    const MyProfileScreen(),
   ];
 
   @override
@@ -31,8 +35,9 @@ class _HomeShellState extends State<HomeShell> {
       body: IndexedStack(index: _index, children: _tabs),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
+        onDestinationSelected: _navigateToTab,
         destinations: const [
+          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
           NavigationDestination(icon: Icon(Icons.article_outlined), selectedIcon: Icon(Icons.article), label: 'News'),
           NavigationDestination(
               icon: Icon(Icons.calendar_today_outlined), selectedIcon: Icon(Icons.calendar_today), label: 'Events'),

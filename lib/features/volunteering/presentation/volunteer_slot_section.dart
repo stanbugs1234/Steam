@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/capacity_bar.dart';
+import '../../../core/widgets/section_card.dart';
 import '../../../models/volunteer_slot.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../data/volunteer_repository.dart';
@@ -19,37 +21,42 @@ class VolunteerSlotSection extends ConsumerWidget {
     final slotsAsync = ref.watch(eventSlotsProvider(eventId));
     final appUser = ref.watch(currentAppUserProvider).value;
     final isAdmin = appUser?.isAdmin ?? false;
+    final colorScheme = Theme.of(context).colorScheme;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return SectionCard(
+      title: 'Volunteer Slots',
+      icon: Icons.volunteer_activism_outlined,
+      padding: EdgeInsets.zero,
+      trailing: isAdmin
+          ? TextButton.icon(
+              onPressed: () => context.push('/events/$eventId/slots'),
+              icon: const Icon(Icons.settings_outlined, size: 18),
+              label: const Text('Manage'),
+            )
+          : null,
       children: [
-        Row(
-          children: [
-            Text('Volunteer Slots', style: Theme.of(context).textTheme.titleMedium),
-            const Spacer(),
-            if (isAdmin)
-              TextButton.icon(
-                onPressed: () => context.push('/events/$eventId/slots'),
-                icon: const Icon(Icons.settings_outlined, size: 18),
-                label: const Text('Manage'),
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
         slotsAsync.when(
           data: (slots) {
             if (slots.isEmpty) {
-              return const Text('No volunteer slots have been set up for this event yet.');
+              return const ListTile(title: Text('No volunteer slots have been set up for this event yet.'));
             }
             return Column(
-              children: slots.map((slot) => _SlotTile(eventId: eventId, slot: slot, myUid: appUser?.uid)).toList(),
+              children: [
+                for (var i = 0; i < slots.length; i++) ...[
+                  if (i > 0) const Divider(height: 1),
+                  _SlotTile(eventId: eventId, slot: slots[i], myUid: appUser?.uid),
+                ],
+              ],
             );
           },
           loading: () => const Padding(
-            padding: EdgeInsets.symmetric(vertical: 12),
+            padding: EdgeInsets.symmetric(vertical: 20),
             child: Center(child: CircularProgressIndicator()),
           ),
-          error: (err, _) => Text('Error loading slots: $err'),
+          error: (err, _) => ListTile(
+            leading: Icon(Icons.error_outline, color: colorScheme.error),
+            title: const Text("Couldn't load volunteer slots."),
+          ),
         ),
       ],
     );
@@ -99,23 +106,22 @@ class _SlotTileState extends ConsumerState<_SlotTile> {
     final slot = widget.slot;
     final signedUp = widget.myUid != null && slot.signedUpUserIds.contains(widget.myUid);
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        title: Text(slot.label),
-        subtitle: Text(
-          _error ?? (slot.isFull ? 'Full' : '${slot.spotsLeft} of ${slot.capacity} spots left'),
-          style: _error != null ? TextStyle(color: Theme.of(context).colorScheme.error) : null,
-        ),
-        trailing: _working
-            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-            : (signedUp
-                ? OutlinedButton(onPressed: () => _toggle(true), child: const Text('Cancel'))
-                : FilledButton(
-                    onPressed: slot.isFull ? null : () => _toggle(false),
-                    child: Text(slot.isFull ? 'Full' : 'Sign Up'),
-                  )),
-      ),
+    return ListTile(
+      title: Text(slot.label),
+      subtitle: _error != null
+          ? Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))
+          : Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: CapacityBar(filled: slot.signedUpUserIds.length, capacity: slot.capacity),
+            ),
+      trailing: _working
+          ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+          : (signedUp
+              ? OutlinedButton(onPressed: () => _toggle(true), child: const Text('Cancel'))
+              : FilledButton(
+                  onPressed: slot.isFull ? null : () => _toggle(false),
+                  child: Text(slot.isFull ? 'Full' : 'Sign Up'),
+                )),
     );
   }
 }

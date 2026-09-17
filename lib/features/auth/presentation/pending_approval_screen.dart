@@ -19,15 +19,15 @@ class PendingApprovalScreen extends ConsumerWidget {
                 const Icon(Icons.hourglass_top, size: 56),
                 const SizedBox(height: 16),
                 Text(
-                  'Your account is awaiting approval',
+                  "You're almost in!",
                   style: Theme.of(context).textTheme.headlineSmall,
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'A club admin needs to approve your request before you can '
-                  'see the member directory, news, and events. This page will '
-                  'update automatically once you\'re approved.',
+                  "A STEAM Club admin just needs to approve your request before you can "
+                  "see the member directory, news, and events. This page will "
+                  "update automatically as soon as you're in.",
                   style: Theme.of(context).textTheme.bodyMedium,
                   textAlign: TextAlign.center,
                 ),

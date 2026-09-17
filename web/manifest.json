@@ -1,11 +1,11 @@
 {
-    "name": "steam_app",
-    "short_name": "steam_app",
+    "name": "STEAM Club",
+    "short_name": "STEAM Club",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#FFFFFF",
     "theme_color": "#0F5C4C",
-    "description": "A new Flutter project.",
+    "description": "STEAM Club member app — events, volunteering, and the member directory.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

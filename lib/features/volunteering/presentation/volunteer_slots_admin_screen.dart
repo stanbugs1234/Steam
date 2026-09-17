@@ -2,6 +2,9 @@ import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/widgets/capacity_bar.dart';
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/error_state.dart';
 import '../../../models/volunteer_slot.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../domain/volunteer_providers.dart';
@@ -104,7 +107,7 @@ class VolunteerSlotsAdminScreen extends ConsumerWidget {
       body: slotsAsync.when(
         data: (slots) {
           if (slots.isEmpty) {
-            return const Center(child: Text('No slots yet. Tap + to add one.'));
+            return const EmptyState(icon: Icons.volunteer_activism_outlined, message: 'No slots yet. Tap + to add one.');
           }
           final members = membersAsync.value ?? const [];
           return ListView.separated(
@@ -137,7 +140,8 @@ class VolunteerSlotsAdminScreen extends ConsumerWidget {
                           ),
                         ],
                       ),
-                      Text('${slot.signedUpUserIds.length} of ${slot.capacity} filled'),
+                      const SizedBox(height: 4),
+                      CapacityBar(filled: slot.signedUpUserIds.length, capacity: slot.capacity),
                       if (names.isNotEmpty) ...[
                         const SizedBox(height: 8),
                         Wrap(
@@ -154,7 +158,7 @@ class VolunteerSlotsAdminScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Error loading slots: $err')),
+        error: (err, _) => ErrorState(message: "Couldn't load volunteer slots.", error: err),
       ),
     );
   }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/empty_state.dart';
+import '../../../core/widgets/error_state.dart';
 import '../../../models/app_user.dart';
 import '../../auth/domain/auth_providers.dart';
 
@@ -72,7 +74,7 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
                       }).toList();
 
                 if (filtered.isEmpty) {
-                  return const Center(child: Text('No members found.'));
+                  return const EmptyState(icon: Icons.people_outline, message: 'No members found.');
                 }
 
                 return Column(
@@ -102,7 +104,7 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
                 );
               },
               loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, _) => Center(child: Text('Error loading directory: $err')),
+              error: (err, _) => ErrorState(message: "Couldn't load the directory right now.", error: err),
             ),
           ),
         ],

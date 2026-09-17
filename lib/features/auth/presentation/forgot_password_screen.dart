@@ -68,8 +68,17 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    Icon(Icons.lock_reset_outlined, size: 56, color: Theme.of(context).colorScheme.primary),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Reset your password',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                    const SizedBox(height: 8),
                     Text(
                       "Enter your email and we'll send you a reset link.",
+                      textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                     const SizedBox(height: 20),
@@ -84,7 +93,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
                       Text(
                         _message!,
                         style: TextStyle(
-                          color: _isError ? Theme.of(context).colorScheme.error : Colors.green.shade700,
+                          color: _isError ? Theme.of(context).colorScheme.error : Theme.of(context).colorScheme.primary,
                         ),
                       ),
                     ],

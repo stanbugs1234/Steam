@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/widgets/error_state.dart';
 import '../../../core/widgets/section_card.dart';
 import '../../../models/app_user.dart';
 import '../../auth/domain/auth_providers.dart';
@@ -179,7 +180,7 @@ class MemberDetailScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => Center(child: Text('Error loading member: $err')),
+        error: (err, _) => ErrorState(message: "Couldn't load this member.", error: err),
       ),
     );
   }

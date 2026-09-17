@@ -8,12 +8,14 @@ class SectionCard extends StatelessWidget {
     super.key,
     required this.title,
     this.icon,
+    this.trailing,
     this.padding = const EdgeInsets.symmetric(horizontal: 20),
     required this.children,
   });
 
   final String title;
   final IconData? icon;
+  final Widget? trailing;
   final EdgeInsetsGeometry padding;
   final List<Widget> children;
 
@@ -32,13 +34,13 @@ class SectionCard extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(bottom: 8, left: 4),
             child: Row(
-              mainAxisSize: MainAxisSize.min,
               children: [
                 if (icon != null) ...[
                   Icon(icon, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
                   const SizedBox(width: 6),
                 ],
-                Text(title, style: labelStyle),
+                Expanded(child: Text(title, style: labelStyle)),
+                ?trailing,
               ],
             ),
           ),

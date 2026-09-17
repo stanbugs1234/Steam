@@ -19,13 +19,13 @@ class DeniedScreen extends ConsumerWidget {
                 Icon(Icons.block, size: 56, color: Theme.of(context).colorScheme.error),
                 const SizedBox(height: 16),
                 Text(
-                  'Account request not approved',
+                  "We couldn't approve your STEAM Club request",
                   style: Theme.of(context).textTheme.headlineSmall,
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'Please contact a club admin if you believe this is a mistake.',
+                  "If you think this doesn't look right, please reach out to a club admin and we'll sort it out.",
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 24),
