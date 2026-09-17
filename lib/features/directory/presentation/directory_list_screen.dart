@@ -45,7 +45,7 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
       body: Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
             child: TextField(
               controller: _searchCtrl,
               decoration: InputDecoration(
@@ -65,7 +65,7 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
             child: DropdownButtonFormField<String?>(
               initialValue: gradeFilter,
               decoration: const InputDecoration(

@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/utils/phone_format.dart';
 import '../../../core/widgets/error_state.dart';
 import '../../../core/widgets/section_card.dart';
 import '../../../models/app_user.dart';
@@ -194,7 +195,7 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
                       _InfoRow(
                         icon: Icons.phone_outlined,
                         label: 'Phone',
-                        value: _formatPhoneNumber(member.phone),
+                        value: formatPhoneNumber(member.phone),
                         onTap: () => launchUrl(Uri(scheme: 'tel', path: member.phone)),
                       ),
                   ],
@@ -246,14 +247,6 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
       ),
     );
   }
-}
-
-// US-only for now, matching the fixed +1 prefix used at signup.
-String _formatPhoneNumber(String raw) {
-  final digits = raw.replaceAll(RegExp(r'\D'), '');
-  final tenDigits = digits.length == 11 && digits.startsWith('1') ? digits.substring(1) : digits;
-  if (tenDigits.length != 10) return raw;
-  return '(${tenDigits.substring(0, 3)}) ${tenDigits.substring(3, 6)}-${tenDigits.substring(6)}';
 }
 
 String _formatMembershipDuration(DateTime since) {

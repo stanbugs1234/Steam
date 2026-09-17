@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/utils/phone_format.dart';
 import '../../../core/widgets/children_form_field.dart';
 import '../../../core/widgets/error_state.dart';
 import '../../../core/widgets/section_card.dart';
@@ -46,7 +47,7 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
     if (_loadedFor?.uid == user.uid) return;
     _loadedFor = user;
     _nameCtrl.text = user.name;
-    _phoneCtrl.text = user.phone;
+    _phoneCtrl.text = formatPhoneNumber(user.phone);
     _kids = user.kids;
   }
 
@@ -66,7 +67,7 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
     try {
       await ref.read(userRepositoryProvider).updateProfile(uid, {
         'name': _nameCtrl.text.trim(),
-        'phone': _phoneCtrl.text.trim(),
+        'phone': _phoneCtrl.text.replaceAll(RegExp(r'\D'), ''),
         'kids': _kids.map((k) => k.toMap()).toList(),
       });
       setState(() => _message = 'Profile updated.');
@@ -201,6 +202,7 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                             child: TextFormField(
                               controller: _phoneCtrl,
                               keyboardType: TextInputType.phone,
+                              inputFormatters: [UsPhoneInputFormatter()],
                               decoration: const InputDecoration(labelText: 'Phone'),
                             ),
                           ),
