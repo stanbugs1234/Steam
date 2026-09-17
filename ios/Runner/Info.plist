@@ -53,6 +53,16 @@
 	<string>Steam Club needs access to your photos so you can set a profile picture.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Steam Club needs access to your camera so you can take a profile picture.</string>
+	<!-- Defensive only: flutter_contacts' native.showCreator() is permissionless
+	     on both platforms, but some OS versions surface a permission prompt
+	     anyway for the "Add to Contacts" feature. -->
+	<key>NSContactsUsageDescription</key>
+	<string>Steam Club can add a member's info to your phone's Contacts app when you tap "Add to Contacts".</string>
+	<!-- App only uses standard HTTPS/TLS via Firebase SDKs (no custom or
+	     non-exempt encryption), so this skips the export-compliance question
+	     on every TestFlight/App Store upload. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
