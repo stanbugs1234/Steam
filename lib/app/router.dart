@@ -14,6 +14,7 @@ import '../features/events/presentation/event_detail_screen.dart';
 import '../features/events/presentation/event_editor_screen.dart';
 import '../features/news/presentation/news_detail_screen.dart';
 import '../features/news/presentation/news_editor_screen.dart';
+import '../features/volunteering/presentation/volunteer_leaderboard_screen.dart';
 import '../features/volunteering/presentation/volunteer_slots_admin_screen.dart';
 import '../models/app_user.dart';
 import 'home_shell.dart';
@@ -103,6 +104,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => VolunteerSlotsAdminScreen(eventId: state.pathParameters['id']!),
       ),
       GoRoute(path: '/admin/approvals', builder: (context, state) => const ApprovalQueueScreen()),
+      GoRoute(path: '/leaderboard', builder: (context, state) => const VolunteerLeaderboardScreen()),
     ],
   );
 });

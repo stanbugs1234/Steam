@@ -53,6 +53,7 @@ class HomeDashboardScreen extends ConsumerWidget {
     final pendingCount = isAdmin ? (ref.watch(pendingUsersProvider).value?.length ?? 0) : 0;
 
     final recentPosts = (newsAsync.value ?? const []).take(3).toList();
+    final topVolunteers = ref.watch(volunteerLeaderboardProvider).take(3).toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Home')),
@@ -191,6 +192,29 @@ class HomeDashboardScreen extends ConsumerWidget {
                     trailing: const Icon(Icons.chevron_right),
                     onTap: () => onNavigateToTab(2),
                   ),
+                ],
+              ),
+            ],
+            if (topVolunteers.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              SectionCard(
+                title: 'Top Volunteers',
+                icon: Icons.emoji_events_outlined,
+                padding: EdgeInsets.zero,
+                trailing: TextButton(
+                  onPressed: () => context.push('/leaderboard'),
+                  child: const Text('See all'),
+                ),
+                children: [
+                  for (var i = 0; i < topVolunteers.length; i++) ...[
+                    if (i > 0) const Divider(height: 1),
+                    ListTile(
+                      title: Text(topVolunteers[i].member.name, overflow: TextOverflow.ellipsis),
+                      subtitle: Text('${topVolunteers[i].hours.toStringAsFixed(1)} hrs'),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => context.push('/directory/${topVolunteers[i].member.uid}'),
+                    ),
+                  ],
                 ],
               ),
             ],

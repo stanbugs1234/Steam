@@ -12,8 +12,10 @@ import '../../../core/utils/phone_format.dart';
 import '../../../core/widgets/admin_badge.dart';
 import '../../../core/widgets/error_state.dart';
 import '../../../core/widgets/section_card.dart';
+import '../../../core/widgets/top_volunteer_badge.dart';
 import '../../../models/app_user.dart';
 import '../../auth/domain/auth_providers.dart';
+import '../../volunteering/domain/volunteer_providers.dart';
 
 class MemberDetailScreen extends ConsumerStatefulWidget {
   const MemberDetailScreen({super.key, required this.uid});
@@ -88,6 +90,7 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
   Widget build(BuildContext context) {
     final membersAsync = ref.watch(approvedMembersProvider);
     final viewer = ref.watch(currentAppUserProvider).value;
+    final topVolunteerUids = ref.watch(topVolunteerUidsProvider);
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
@@ -143,6 +146,10 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
                     if (member.isAdmin) ...[
                       const SizedBox(height: 6),
                       const AdminBadge(),
+                    ],
+                    if (topVolunteerUids.contains(member.uid)) ...[
+                      const SizedBox(height: 6),
+                      const TopVolunteerBadge(),
                     ],
                     if (_supportsContacts) ...[
                       const SizedBox(height: 20),

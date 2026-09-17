@@ -14,6 +14,7 @@ import '../../../models/app_user.dart';
 import '../../../models/child_info.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../../notifications/domain/notification_providers.dart';
+import '../../volunteering/domain/volunteer_providers.dart';
 import '../domain/directory_providers.dart';
 
 bool get _supportsReminders => !kIsWeb && (Platform.isIOS || Platform.isAndroid);
@@ -128,6 +129,7 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
         data: (user) {
           if (user == null) return const SizedBox.shrink();
           _syncControllers(user);
+          final myVolunteerHours = ref.watch(volunteerHoursProvider).value?[user.uid] ?? 0;
 
           return Center(
             child: ConstrainedBox(
@@ -220,6 +222,20 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                           Padding(
                             padding: const EdgeInsets.all(16),
                             child: ChildrenFormField(initialChildren: _kids, onChanged: (kids) => _kids = kids),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      SectionCard(
+                        title: 'Your Volunteer Hours',
+                        icon: Icons.emoji_events_outlined,
+                        padding: EdgeInsets.zero,
+                        children: [
+                          ListTile(
+                            title: Text('${myVolunteerHours.toStringAsFixed(1)} hrs total'),
+                            subtitle: const Text('From past events you signed up to help with.'),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => context.push('/leaderboard'),
                           ),
                         ],
                       ),

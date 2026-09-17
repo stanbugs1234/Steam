@@ -6,8 +6,10 @@ import '../../../core/widgets/admin_badge.dart';
 import '../../../core/widgets/children_form_field.dart' show kGradeOptions;
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_state.dart';
+import '../../../core/widgets/top_volunteer_badge.dart';
 import '../../../models/app_user.dart';
 import '../../auth/domain/auth_providers.dart';
+import '../../volunteering/domain/volunteer_providers.dart';
 
 final _directorySearchProvider = StateProvider<String>((ref) => '');
 final _directoryGradeFilterProvider = StateProvider<String?>((ref) => null);
@@ -141,7 +143,7 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
   }
 }
 
-class _MemberTile extends StatelessWidget {
+class _MemberTile extends ConsumerWidget {
   const _MemberTile({required this.member});
 
   final AppUser member;
@@ -154,7 +156,8 @@ class _MemberTile extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isTopVolunteer = ref.watch(topVolunteerUidsProvider).contains(member.uid);
     final colorScheme = Theme.of(context).colorScheme;
     final kidsLabel = member.kids
         .map((k) => k.grade.isNotEmpty ? '${k.name} (${k.grade})' : k.name)
@@ -179,6 +182,10 @@ class _MemberTile extends StatelessWidget {
             if (member.isAdmin) ...[
               const SizedBox(width: 8),
               const AdminBadge(),
+            ],
+            if (isTopVolunteer) ...[
+              const SizedBox(width: 8),
+              const TopVolunteerBadge(),
             ],
           ],
         ),
