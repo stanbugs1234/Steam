@@ -17,6 +17,7 @@ class AppUser {
   final UserStatus status;
   final DateTime? createdAt;
   final String? mergedFromId;
+  final bool remindersEnabled;
 
   const AppUser({
     required this.uid,
@@ -29,6 +30,7 @@ class AppUser {
     required this.status,
     this.createdAt,
     this.mergedFromId,
+    this.remindersEnabled = true,
   });
 
   bool get isApproved => status == UserStatus.approved;
@@ -47,6 +49,7 @@ class AppUser {
       status: _statusFromString(data['status'] as String?),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       mergedFromId: data['mergedFromId'] as String?,
+      remindersEnabled: data['remindersEnabled'] as bool? ?? true,
     );
   }
 
@@ -84,6 +87,7 @@ class AppUser {
       'status': status.name,
       'createdAt': createdAt == null ? FieldValue.serverTimestamp() : Timestamp.fromDate(createdAt!),
       'mergedFromId': mergedFromId,
+      'remindersEnabled': remindersEnabled,
     };
   }
 
@@ -94,6 +98,7 @@ class AppUser {
     String? photoUrl,
     UserRole? role,
     UserStatus? status,
+    bool? remindersEnabled,
   }) {
     return AppUser(
       uid: uid,
@@ -106,6 +111,7 @@ class AppUser {
       status: status ?? this.status,
       createdAt: createdAt,
       mergedFromId: mergedFromId,
+      remindersEnabled: remindersEnabled ?? this.remindersEnabled,
     );
   }
 }

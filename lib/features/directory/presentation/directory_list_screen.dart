@@ -2,12 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/widgets/children_form_field.dart' show kGradeOptions;
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_state.dart';
 import '../../../models/app_user.dart';
 import '../../auth/domain/auth_providers.dart';
 
 final _directorySearchProvider = StateProvider<String>((ref) => '');
+final _directoryGradeFilterProvider = StateProvider<String?>((ref) => null);
 
 String _digitsOnly(String s) => s.replaceAll(RegExp(r'\D'), '');
 
@@ -36,6 +38,7 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
   Widget build(BuildContext context) {
     final membersAsync = ref.watch(approvedMembersProvider);
     final query = ref.watch(_directorySearchProvider).trim().toLowerCase();
+    final gradeFilter = ref.watch(_directoryGradeFilterProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Member Directory')),
@@ -61,20 +64,43 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
               onChanged: (value) => ref.read(_directorySearchProvider.notifier).state = value,
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: DropdownButtonFormField<String?>(
+              initialValue: gradeFilter,
+              decoration: const InputDecoration(
+                labelText: 'Filter by grade',
+                prefixIcon: Icon(Icons.filter_alt_outlined),
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('All Grades')),
+                for (final grade in kGradeOptions) DropdownMenuItem(value: grade, child: Text(grade)),
+              ],
+              onChanged: (value) => ref.read(_directoryGradeFilterProvider.notifier).state = value,
+            ),
+          ),
           Expanded(
             child: membersAsync.when(
               data: (members) {
                 final queryDigits = _digitsOnly(query);
-                final filtered = query.isEmpty
-                    ? members
-                    : members.where((m) {
-                        return m.name.toLowerCase().contains(query) ||
-                            m.kids.any((k) => k.name.toLowerCase().contains(query)) ||
-                            (queryDigits.isNotEmpty && _digitsOnly(m.phone).contains(queryDigits));
-                      }).toList();
+                final filtered = members.where((m) {
+                  final matchesQuery = query.isEmpty ||
+                      m.name.toLowerCase().contains(query) ||
+                      m.kids.any((k) => k.name.toLowerCase().contains(query)) ||
+                      (queryDigits.isNotEmpty && _digitsOnly(m.phone).contains(queryDigits));
+                  final matchesGrade = gradeFilter == null || m.kids.any((k) => k.grade == gradeFilter);
+                  return matchesQuery && matchesGrade;
+                }).toList();
 
                 if (filtered.isEmpty) {
-                  return const EmptyState(icon: Icons.people_outline, message: 'No members found.');
+                  return EmptyState(
+                    icon: Icons.people_outline,
+                    message: gradeFilter == null
+                        ? 'No members found.'
+                        : 'No members found with a kid in $gradeFilter.',
+                  );
                 }
 
                 return Column(
@@ -84,7 +110,8 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
                       child: Align(
                         alignment: Alignment.centerLeft,
                         child: Text(
-                          '${filtered.length} member${filtered.length == 1 ? '' : 's'}',
+                          '${filtered.length} member${filtered.length == 1 ? '' : 's'}'
+                          '${gradeFilter == null ? '' : ' · $gradeFilter'}',
                           style: Theme.of(context).textTheme.labelLarge?.copyWith(
                                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 fontWeight: FontWeight.w600,

@@ -4,20 +4,23 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/widgets/capacity_bar.dart';
 import '../../../core/widgets/section_card.dart';
+import '../../../models/club_event.dart';
 import '../../../models/volunteer_slot.dart';
 import '../../auth/domain/auth_providers.dart';
+import '../../notifications/domain/notification_providers.dart';
 import '../data/volunteer_repository.dart';
 import '../domain/volunteer_providers.dart';
 
 /// Shown on an event's detail screen: lets members sign up/cancel for
 /// volunteer slots, and gives admins a shortcut to manage the slots.
 class VolunteerSlotSection extends ConsumerWidget {
-  const VolunteerSlotSection({super.key, required this.eventId});
+  const VolunteerSlotSection({super.key, required this.event});
 
-  final String eventId;
+  final ClubEvent event;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final eventId = event.id;
     final slotsAsync = ref.watch(eventSlotsProvider(eventId));
     final appUser = ref.watch(currentAppUserProvider).value;
     final isAdmin = appUser?.isAdmin ?? false;
@@ -44,7 +47,12 @@ class VolunteerSlotSection extends ConsumerWidget {
               children: [
                 for (var i = 0; i < slots.length; i++) ...[
                   if (i > 0) const Divider(height: 1),
-                  _SlotTile(eventId: eventId, slot: slots[i], myUid: appUser?.uid),
+                  _SlotTile(
+                    event: event,
+                    slot: slots[i],
+                    myUid: appUser?.uid,
+                    remindersEnabled: appUser?.remindersEnabled ?? true,
+                  ),
                 ],
               ],
             );
@@ -64,11 +72,17 @@ class VolunteerSlotSection extends ConsumerWidget {
 }
 
 class _SlotTile extends ConsumerStatefulWidget {
-  const _SlotTile({required this.eventId, required this.slot, required this.myUid});
+  const _SlotTile({
+    required this.event,
+    required this.slot,
+    required this.myUid,
+    required this.remindersEnabled,
+  });
 
-  final String eventId;
+  final ClubEvent event;
   final VolunteerSlot slot;
   final String? myUid;
+  final bool remindersEnabled;
 
   @override
   ConsumerState<_SlotTile> createState() => _SlotTileState();
@@ -87,10 +101,31 @@ class _SlotTileState extends ConsumerState<_SlotTile> {
     });
     try {
       final repo = ref.read(volunteerRepositoryProvider);
+      final eventId = widget.event.id;
+      final slotId = widget.slot.id;
       if (signedUp) {
-        await repo.cancel(widget.eventId, widget.slot.id, uid);
+        await repo.cancel(eventId, slotId, uid);
       } else {
-        await repo.signUp(widget.eventId, widget.slot.id, uid);
+        await repo.signUp(eventId, slotId, uid);
+      }
+      // Scheduling/cancelling the local reminder is best-effort: the sign-up
+      // itself already succeeded above, so a reminder failure (e.g. no
+      // notification permission) shouldn't surface as a sign-up error.
+      try {
+        final reminders = ref.read(reminderServiceProvider);
+        if (signedUp) {
+          await reminders.cancelVolunteerReminder(eventId, slotId);
+        } else if (widget.remindersEnabled) {
+          await reminders.scheduleVolunteerReminder(
+            eventId: eventId,
+            slotId: slotId,
+            eventTitle: widget.event.title,
+            slotLabel: widget.slot.label,
+            eventStart: widget.event.startTime,
+          );
+        }
+      } catch (_) {
+        // Ignore — see comment above.
       }
     } on SlotFullException {
       setState(() => _error = 'This slot just filled up.');

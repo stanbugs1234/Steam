@@ -13,10 +13,17 @@ import '../../../core/widgets/section_card.dart';
 import '../../../models/app_user.dart';
 import '../../auth/domain/auth_providers.dart';
 
-class MemberDetailScreen extends ConsumerWidget {
+class MemberDetailScreen extends ConsumerStatefulWidget {
   const MemberDetailScreen({super.key, required this.uid});
 
   final String uid;
+
+  @override
+  ConsumerState<MemberDetailScreen> createState() => _MemberDetailScreenState();
+}
+
+class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
+  bool _settingRole = false;
 
   bool get _supportsContacts => !kIsWeb && (Platform.isIOS || Platform.isAndroid);
 
@@ -43,16 +50,49 @@ class MemberDetailScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _setRole(AppUser member, bool makeAdmin) async {
+    if (!makeAdmin) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Remove admin access?'),
+          content: Text('${member.name} will lose access to admin tools like Pending Approvals.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Remove Access')),
+          ],
+        ),
+      );
+      if (confirmed != true) return;
+    }
+
+    setState(() => _settingRole = true);
+    try {
+      await ref
+          .read(userRepositoryProvider)
+          .setRole(member.uid, makeAdmin ? UserRole.admin : UserRole.member);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update admin access: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _settingRole = false);
+    }
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final membersAsync = ref.watch(approvedMembersProvider);
+    final viewer = ref.watch(currentAppUserProvider).value;
     final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Member')),
       body: membersAsync.when(
         data: (members) {
-          final member = members.where((m) => m.uid == uid).firstOrNull;
+          final member = members.where((m) => m.uid == widget.uid).firstOrNull;
           if (member == null) {
             return const Center(child: Text('Member not found.'));
           }
@@ -173,6 +213,28 @@ class MemberDetailScreen extends ConsumerWidget {
                         value: member.kids[i].name,
                       ),
                     ],
+                  ],
+                ),
+              ],
+              if (viewer != null && viewer.isAdmin) ...[
+                const SizedBox(height: 16),
+                SectionCard(
+                  title: 'Admin Tools',
+                  icon: Icons.admin_panel_settings_outlined,
+                  padding: EdgeInsets.zero,
+                  children: [
+                    SwitchListTile(
+                      title: const Text('Admin access'),
+                      subtitle: Text(
+                        member.uid == viewer.uid
+                            ? "You can't change your own admin access here."
+                            : 'Grants access to Pending Approvals and this admin toggle.',
+                      ),
+                      value: member.isAdmin,
+                      onChanged: _settingRole || member.uid == viewer.uid
+                          ? null
+                          : (value) => _setRole(member, value),
+                    ),
                   ],
                 ),
               ],

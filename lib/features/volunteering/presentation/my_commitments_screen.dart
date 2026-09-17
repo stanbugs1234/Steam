@@ -6,10 +6,20 @@ import 'package:intl/intl.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_state.dart';
 import '../../auth/domain/auth_providers.dart';
+import '../../notifications/domain/notification_providers.dart';
 import '../domain/volunteer_providers.dart';
 
 class MyCommitmentsScreen extends ConsumerWidget {
   const MyCommitmentsScreen({super.key});
+
+  Future<void> _cancel(WidgetRef ref, String eventId, String slotId, String uid) async {
+    await ref.read(volunteerRepositoryProvider).cancel(eventId, slotId, uid);
+    try {
+      await ref.read(reminderServiceProvider).cancelVolunteerReminder(eventId, slotId);
+    } catch (_) {
+      // Best-effort — the cancellation itself already succeeded above.
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -40,9 +50,7 @@ class MyCommitmentsScreen extends ConsumerWidget {
                   trailing: IconButton(
                     icon: const Icon(Icons.close),
                     tooltip: 'Cancel',
-                    onPressed: myUid == null
-                        ? null
-                        : () => ref.read(volunteerRepositoryProvider).cancel(c.event.id, c.slot.id, myUid),
+                    onPressed: myUid == null ? null : () => _cancel(ref, c.event.id, c.slot.id, myUid),
                   ),
                 ),
               );

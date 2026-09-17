@@ -116,7 +116,7 @@ class EventDetailScreen extends ConsumerWidget {
               ],
               if (event.needsVolunteers) ...[
                 const SizedBox(height: 16),
-                VolunteerSlotSection(eventId: event.id),
+                VolunteerSlotSection(event: event),
               ],
             ],
           );

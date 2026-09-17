@@ -1,3 +1,6 @@
+import 'dart:io' show Platform;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,7 +12,10 @@ import '../../../core/widgets/section_card.dart';
 import '../../../models/app_user.dart';
 import '../../../models/child_info.dart';
 import '../../auth/domain/auth_providers.dart';
+import '../../notifications/domain/notification_providers.dart';
 import '../domain/directory_providers.dart';
+
+bool get _supportsReminders => !kIsWeb && (Platform.isIOS || Platform.isAndroid);
 
 class MyProfileScreen extends ConsumerStatefulWidget {
   const MyProfileScreen({super.key});
@@ -68,6 +74,21 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
       setState(() => _message = 'Could not save changes: $e');
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _setRemindersEnabled(String uid, bool value) async {
+    try {
+      await ref.read(userRepositoryProvider).updateProfile(uid, {'remindersEnabled': value});
+      if (value) {
+        await ref.read(reminderServiceProvider).requestPermission();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update notification settings: $e')),
+        );
+      }
     }
   }
 
@@ -197,6 +218,24 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                           ),
                         ],
                       ),
+                      if (_supportsReminders) ...[
+                        const SizedBox(height: 16),
+                        SectionCard(
+                          title: 'Notifications',
+                          icon: Icons.notifications_outlined,
+                          padding: EdgeInsets.zero,
+                          children: [
+                            SwitchListTile(
+                              title: const Text('Event & volunteer reminders'),
+                              subtitle: const Text(
+                                "Get a reminder on this device the day before a volunteer shift you've signed up for.",
+                              ),
+                              value: user.remindersEnabled,
+                              onChanged: (value) => _setRemindersEnabled(user.uid, value),
+                            ),
+                          ],
+                        ),
+                      ],
                       if (_message != null) ...[
                         const SizedBox(height: 16),
                         Text(_message!, style: Theme.of(context).textTheme.bodyMedium),
