@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/widgets/section_card.dart';
 import '../../../models/club_event.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../domain/event_providers.dart';
@@ -165,35 +166,64 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  TextFormField(
-                    controller: _titleCtrl,
-                    decoration: const InputDecoration(labelText: 'Title'),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _locationCtrl,
-                    decoration: const InputDecoration(labelText: 'Location'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _descriptionCtrl,
-                    decoration: const InputDecoration(labelText: 'Description', alignLabelWithHint: true),
-                    minLines: 4,
-                    maxLines: 10,
+                  SectionCard(
+                    title: 'Details',
+                    icon: Icons.info_outline,
+                    padding: EdgeInsets.zero,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+                        child: TextFormField(
+                          controller: _titleCtrl,
+                          decoration: const InputDecoration(labelText: 'Title'),
+                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: TextFormField(
+                          controller: _locationCtrl,
+                          decoration: const InputDecoration(labelText: 'Location'),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                        child: TextFormField(
+                          controller: _descriptionCtrl,
+                          decoration: const InputDecoration(labelText: 'Description', alignLabelWithHint: true),
+                          minLines: 4,
+                          maxLines: 10,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 16),
-                  _buildDateTimeRow(label: 'Starts', value: _start, isStart: true),
-                  const SizedBox(height: 8),
-                  _buildDateTimeRow(label: 'Ends', value: _end, isStart: false),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Needs volunteers'),
-                    value: _needsVolunteers,
-                    onChanged: (v) => setState(() => _needsVolunteers = v),
+                  SectionCard(
+                    title: 'Schedule',
+                    icon: Icons.schedule_outlined,
+                    padding: EdgeInsets.zero,
+                    children: [
+                      _buildDateTimeRow(label: 'Starts', value: _start, isStart: true),
+                      const Divider(height: 1),
+                      _buildDateTimeRow(label: 'Ends', value: _end, isStart: false),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  SectionCard(
+                    title: 'Options',
+                    icon: Icons.tune,
+                    padding: EdgeInsets.zero,
+                    children: [
+                      SwitchListTile(
+                        secondary: const Icon(Icons.volunteer_activism_outlined),
+                        title: const Text('Needs volunteers'),
+                        value: _needsVolunteers,
+                        onChanged: (v) => setState(() => _needsVolunteers = v),
+                      ),
+                    ],
                   ),
                   if (_error != null) ...[
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 12),
                     Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
                   ],
                   const SizedBox(height: 20),
@@ -214,18 +244,33 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
 
   Widget _buildDateTimeRow({required String label, required DateTime value, required bool isStart}) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Expanded(child: Text(label, style: Theme.of(context).textTheme.bodyLarge)),
-          OutlinedButton(
-            onPressed: () => _pickDate(isStart: isStart),
-            child: Text(DateFormat.yMMMd().format(value)),
+          SizedBox(
+            width: 56,
+            child: Text(label, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500)),
           ),
           const SizedBox(width: 8),
-          OutlinedButton(
-            onPressed: () => _pickTime(isStart: isStart),
-            child: Text(DateFormat.jm().format(value)),
+          Expanded(
+            child: Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: () => _pickDate(isStart: isStart),
+                  icon: const Icon(Icons.calendar_today_outlined, size: 16),
+                  label: Text(DateFormat.yMMMd().format(value)),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => _pickTime(isStart: isStart),
+                  icon: const Icon(Icons.access_time, size: 16),
+                  label: Text(DateFormat.jm().format(value)),
+                ),
+              ],
+            ),
           ),
         ],
       ),

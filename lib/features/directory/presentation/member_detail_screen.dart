@@ -8,6 +8,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/widgets/section_card.dart';
 import '../../../models/app_user.dart';
 import '../../auth/domain/auth_providers.dart';
 
@@ -118,7 +119,7 @@ class MemberDetailScreen extends ConsumerWidget {
               ),
               if (member.createdAt != null) ...[
                 const SizedBox(height: 20),
-                _SectionCard(
+                SectionCard(
                   title: 'Membership',
                   children: [
                     _InfoRow(
@@ -137,7 +138,7 @@ class MemberDetailScreen extends ConsumerWidget {
               ],
               if (member.email.isNotEmpty || member.phone.isNotEmpty) ...[
                 const SizedBox(height: 16),
-                _SectionCard(
+                SectionCard(
                   title: 'Contact Info',
                   children: [
                     if (member.email.isNotEmpty)
@@ -160,7 +161,7 @@ class MemberDetailScreen extends ConsumerWidget {
               ],
               if (member.kids.isNotEmpty) ...[
                 const SizedBox(height: 16),
-                _SectionCard(
+                SectionCard(
                   title: member.kids.length == 1 ? '1 Child Enrolled' : '${member.kids.length} Children Enrolled',
                   children: [
                     for (var i = 0; i < member.kids.length; i++) ...[
@@ -203,40 +204,6 @@ String _formatMembershipDuration(DateTime since) {
   if (years == 0) return '$remainingMonths month${remainingMonths == 1 ? '' : 's'}';
   if (remainingMonths == 0) return '$years year${years == 1 ? '' : 's'}';
   return '$years year${years == 1 ? '' : 's'} $remainingMonths month${remainingMonths == 1 ? '' : 's'}';
-}
-
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.title, required this.children});
-
-  final String title;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8, left: 4),
-            child: Text(
-              title,
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    fontWeight: FontWeight.w600,
-                  ),
-            ),
-          ),
-          Card(
-            margin: EdgeInsets.zero,
-            clipBehavior: Clip.antiAlias,
-            child: Column(children: children),
-          ),
-        ],
-      ),
-    );
-  }
 }
 
 class _InfoRow extends StatelessWidget {

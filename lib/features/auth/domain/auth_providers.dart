@@ -25,8 +25,26 @@ final currentAppUserProvider = StreamProvider<AppUser?>((ref) {
   final authState = ref.watch(authStateProvider);
   final user = authState.value;
   if (user == null) return Stream.value(null);
-  return ref.watch(userRepositoryProvider).watchUser(user.uid);
+  return _watchUserResilient(ref.watch(userRepositoryProvider), user.uid);
 });
+
+/// Firestore's client can briefly lag a beat behind a just-completed sign-in
+/// before it picks up the fresh auth token, which spuriously denies the very
+/// first read of a new subscription with `permission-denied` even though the
+/// user is legitimately signed in. Re-subscribe a couple of times with a
+/// short backoff before giving up and surfacing the error for real.
+Stream<AppUser?> _watchUserResilient(UserRepository userRepo, String uid) async* {
+  const maxAttempts = 3;
+  for (var attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      yield* userRepo.watchUser(uid);
+      return;
+    } on FirebaseException catch (e) {
+      if (e.code != 'permission-denied' || attempt == maxAttempts) rethrow;
+      await Future.delayed(Duration(milliseconds: 300 * attempt));
+    }
+  }
+}
 
 final pendingUsersProvider = StreamProvider<List<AppUser>>((ref) {
   return ref.watch(userRepositoryProvider).watchPendingUsers();

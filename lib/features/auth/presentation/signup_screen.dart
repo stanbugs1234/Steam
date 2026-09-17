@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/widgets/children_form_field.dart';
 import '../../../models/app_user.dart';
 import '../../../models/child_info.dart';
+import '../data/user_repository.dart';
 import '../domain/auth_providers.dart';
 
 enum _SignupMode { email, phone }
@@ -157,12 +158,13 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
   /// Called right after a phone number is verified (whether that's a brand
   /// new sign-up or a returning member signing back in). Deliberately no
-  /// try/catch around the `getUser` lookup: if it fails, let the error
-  /// surface via the caller's own catch block rather than silently treating
-  /// a lookup failure as "new user" and risking a profile overwrite.
+  /// try/catch around the final `getUser` lookup beyond the permission-denied
+  /// retry below: if it still fails, let the error surface via the caller's
+  /// own catch block rather than silently treating a lookup failure as "new
+  /// user" and risking a profile overwrite.
   Future<void> _afterPhoneVerified(User firebaseUser) async {
     final userRepo = ref.read(userRepositoryProvider);
-    final existing = await userRepo.getUser(firebaseUser.uid);
+    final existing = await _getUserRetryingPermissionDenied(userRepo, firebaseUser.uid);
     if (existing != null) {
       // Returning member — leave their profile untouched and let the router
       // redirect take them to /home (or /pending-approval / /denied).
@@ -575,5 +577,21 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         ),
       ),
     );
+  }
+}
+
+/// Firestore's client can briefly lag a beat behind a just-completed sign-in
+/// before it picks up the fresh auth token, which spuriously denies the very
+/// next read with `permission-denied` even though the user is legitimately
+/// signed in. Retry a couple of times with a short backoff before giving up.
+Future<AppUser?> _getUserRetryingPermissionDenied(UserRepository userRepo, String uid) async {
+  const maxAttempts = 3;
+  for (var attempt = 1; ; attempt++) {
+    try {
+      return await userRepo.getUser(uid);
+    } on FirebaseException catch (e) {
+      if (e.code != 'permission-denied' || attempt >= maxAttempts) rethrow;
+      await Future.delayed(Duration(milliseconds: 300 * attempt));
+    }
   }
 }
