@@ -43,7 +43,7 @@
 				<!-- Required for Firebase Phone Auth's reCAPTCHA redirect on iOS.
 				     No REVERSED_CLIENT_ID exists (Google Sign-In isn't configured),
 				     so this uses the encoded GOOGLE_APP_ID form Firebase falls back to. -->
-				<string>app-1-968754784411-ios-67757e0a767b081ac4fe3e</string>
+				<string>app-1-968754784411-ios-823d3d77effb1a85c4fe3e</string>
 			</array>
 		</dict>
 	</array>

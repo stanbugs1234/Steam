@@ -9,7 +9,7 @@
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>com.steamclub.steamApp</string>
+	<string>com.stedwardsteamclub.app</string>
 	<key>PROJECT_ID</key>
 	<string>steam-club-app</string>
 	<key>STORAGE_BUCKET</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:968754784411:ios:67757e0a767b081ac4fe3e</string>
+	<string>1:968754784411:ios:823d3d77effb1a85c4fe3e</string>
 </dict>
 </plist>
