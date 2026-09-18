@@ -114,9 +114,28 @@ service cloud.firestore {
           && !resource.data.checkedInUserIds.hasAll([request.auth.uid]);
       }
 
+      // Any approved member may turn check-in on for an event themselves —
+      // e.g. whoever's running that meeting, not just an app admin — but
+      // only within a window around the event's own time, so it can't be
+      // flipped on for an unrelated past/future event.
+      function isStartingCheckIn() {
+        return resource.data.checkInEnabled == false
+          && request.resource.data.checkInEnabled == true
+          && request.resource.data.title == resource.data.title
+          && request.resource.data.description == resource.data.description
+          && request.resource.data.location == resource.data.location
+          && request.resource.data.startTime == resource.data.startTime
+          && request.resource.data.endTime == resource.data.endTime
+          && request.resource.data.needsVolunteers == resource.data.needsVolunteers
+          && request.resource.data.checkedInUserIds == resource.data.checkedInUserIds
+          && request.time > resource.data.startTime - duration.value(30, 'm')
+          && request.time < resource.data.endTime + duration.value(2, 'h');
+      }
+
       allow read: if isApprovedMember() || isAdmin();
       allow create, delete: if isAdmin();
-      allow update: if isAdmin() || (isApprovedMember() && isSelfCheckInChange());
+      allow update: if isAdmin()
+        || (isApprovedMember() && (isSelfCheckInChange() || isStartingCheckIn()));
 
       // Members may only toggle their own membership in signedUpUserIds
       // (add or remove exactly their own uid, nothing else); admins manage

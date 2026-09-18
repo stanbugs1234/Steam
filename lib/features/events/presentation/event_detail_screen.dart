@@ -6,14 +6,42 @@ import 'package:intl/intl.dart';
 
 import '../../../core/widgets/error_state.dart';
 import '../../../core/widgets/section_card.dart';
+import '../../../models/club_event.dart';
+import '../../attendance/domain/attendance_providers.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../../volunteering/presentation/volunteer_slot_section.dart';
 import '../domain/event_providers.dart';
+
+/// Whether check-in can be started/shown right now — anyone can start
+/// check-in for an event, but only within a window around its own time, so
+/// this can't be used on a random past or far-future event. Mirrors the
+/// Firestore rule (`isStartingCheckIn`) that actually enforces this.
+bool _canUseCheckIn(ClubEvent event) {
+  final now = DateTime.now();
+  return now.isAfter(event.startTime.subtract(const Duration(minutes: 30))) &&
+      now.isBefore(event.endTime.add(const Duration(hours: 2)));
+}
 
 class EventDetailScreen extends ConsumerWidget {
   const EventDetailScreen({super.key, required this.eventId});
 
   final String eventId;
+
+  Future<void> _startCheckInAndShowQr(BuildContext context, WidgetRef ref, ClubEvent event) async {
+    if (!event.checkInEnabled) {
+      try {
+        await ref.read(attendanceRepositoryProvider).startCheckIn(event.id);
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not start check-in: $e')),
+          );
+        }
+        return;
+      }
+    }
+    if (context.mounted) context.push('/events/${event.id}/qr');
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -24,20 +52,20 @@ class EventDetailScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Event'),
         actions: [
-          if (isAdmin)
-            eventsAsync.maybeWhen(
-              data: (events) {
-                final event = events.firstWhereOrNull((e) => e.id == eventId);
-                if (event == null) return const SizedBox.shrink();
-                return Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (event.checkInEnabled)
-                      IconButton(
-                        icon: const Icon(Icons.qr_code_2),
-                        tooltip: 'Show check-in QR',
-                        onPressed: () => context.push('/events/${event.id}/qr'),
-                      ),
+          eventsAsync.maybeWhen(
+            data: (events) {
+              final event = events.firstWhereOrNull((e) => e.id == eventId);
+              if (event == null) return const SizedBox.shrink();
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_canUseCheckIn(event))
+                    IconButton(
+                      icon: const Icon(Icons.qr_code_2),
+                      tooltip: 'Check-in QR',
+                      onPressed: () => _startCheckInAndShowQr(context, ref, event),
+                    ),
+                  if (isAdmin) ...[
                     IconButton(
                       icon: const Icon(Icons.edit_outlined),
                       onPressed: () => context.push('/events/${event.id}/edit'),
@@ -63,10 +91,11 @@ class EventDetailScreen extends ConsumerWidget {
                       },
                     ),
                   ],
-                );
-              },
-              orElse: () => const SizedBox.shrink(),
-            ),
+                ],
+              );
+            },
+            orElse: () => const SizedBox.shrink(),
+          ),
         ],
       ),
       body: eventsAsync.when(
@@ -124,7 +153,7 @@ class EventDetailScreen extends ConsumerWidget {
                 const SizedBox(height: 16),
                 VolunteerSlotSection(event: event),
               ],
-              if (event.checkInEnabled && isAdmin) ...[
+              if (event.checkInEnabled) ...[
                 const SizedBox(height: 16),
                 SectionCard(
                   title: 'Attendance',

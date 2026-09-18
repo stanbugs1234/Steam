@@ -66,8 +66,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           loc == '/news/new' ||
           loc == '/events/new' ||
           loc.endsWith('/edit') ||
-          loc.endsWith('/slots') ||
-          loc.endsWith('/qr');
+          loc.endsWith('/slots');
       if (adminOnly && !appUser.isAdmin) {
         return '/home';
       }
