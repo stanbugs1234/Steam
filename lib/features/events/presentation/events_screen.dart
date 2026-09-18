@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 
+import '../../../core/widgets/capacity_bar.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_state.dart';
 import '../../../models/club_event.dart';
@@ -23,8 +24,30 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
 
+  // TableCalendar's eventLoader is called once per visible day cell (~42
+  // times per month view) plus again for the selected day's list, so a full
+  // linear scan of `events` per call gets expensive as event history grows.
+  // Cache the day->events grouping and only rebuild it when the events list
+  // itself actually changes.
+  List<ClubEvent>? _groupedForEvents;
+  Map<DateTime, List<ClubEvent>> _eventsByDay = {};
+
+  Map<DateTime, List<ClubEvent>> _groupByDay(List<ClubEvent> events) {
+    if (!identical(_groupedForEvents, events)) {
+      final byDay = <DateTime, List<ClubEvent>>{};
+      for (final event in events) {
+        final day = DateTime(event.startTime.year, event.startTime.month, event.startTime.day);
+        (byDay[day] ??= []).add(event);
+      }
+      _eventsByDay = byDay;
+      _groupedForEvents = events;
+    }
+    return _eventsByDay;
+  }
+
   List<ClubEvent> _eventsOnDay(List<ClubEvent> events, DateTime day) {
-    return events.where((e) => isSameDay(e.startTime, day)).toList();
+    final key = DateTime(day.year, day.month, day.day);
+    return _groupByDay(events)[key] ?? const [];
   }
 
   bool get _isOnToday => isSameDay(_focusedDay, DateTime.now());
@@ -91,38 +114,69 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
   }
 
   Widget _buildCalendarTab(List<ClubEvent> events) {
+    final colorScheme = Theme.of(context).colorScheme;
     final selected = _selectedDay ?? DateTime.now();
     final dayEvents = _eventsOnDay(events, selected);
 
     return Column(
       children: [
-        TableCalendar<ClubEvent>(
-          firstDay: DateTime.now().subtract(const Duration(days: 365)),
-          lastDay: DateTime.now().add(const Duration(days: 365 * 2)),
-          focusedDay: _focusedDay,
-          selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-          eventLoader: (day) => _eventsOnDay(events, day),
-          onDaySelected: (selectedDay, focusedDay) {
-            setState(() {
-              _selectedDay = selectedDay;
-              _focusedDay = focusedDay;
-            });
-          },
-          onPageChanged: (focusedDay) => setState(() => _focusedDay = focusedDay),
-          headerStyle: const HeaderStyle(formatButtonVisible: false),
-          calendarStyle: CalendarStyle(
-            markerDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
-            selectedDecoration: BoxDecoration(color: Theme.of(context).colorScheme.primary, shape: BoxShape.circle),
-            todayDecoration:
-                BoxDecoration(color: Theme.of(context).colorScheme.primaryContainer, shape: BoxShape.circle),
+        Container(
+          margin: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: colorScheme.outlineVariant),
+          ),
+          child: TableCalendar<ClubEvent>(
+            firstDay: DateTime.now().subtract(const Duration(days: 365)),
+            lastDay: DateTime.now().add(const Duration(days: 365 * 2)),
+            focusedDay: _focusedDay,
+            selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+            eventLoader: (day) => _eventsOnDay(events, day),
+            onDaySelected: (selectedDay, focusedDay) {
+              setState(() {
+                _selectedDay = selectedDay;
+                _focusedDay = focusedDay;
+              });
+            },
+            onPageChanged: (focusedDay) => setState(() => _focusedDay = focusedDay),
+            headerStyle: HeaderStyle(
+              formatButtonVisible: false,
+              titleCentered: true,
+              titleTextStyle: TextStyle(fontWeight: FontWeight.bold, color: colorScheme.onSurface, fontSize: 17),
+              leftChevronIcon: Icon(Icons.chevron_left, color: colorScheme.primary),
+              rightChevronIcon: Icon(Icons.chevron_right, color: colorScheme.primary),
+            ),
+            daysOfWeekStyle: DaysOfWeekStyle(
+              weekdayStyle: TextStyle(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
+              weekendStyle: TextStyle(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
+            ),
+            calendarStyle: CalendarStyle(
+              markerDecoration: BoxDecoration(color: colorScheme.primary, shape: BoxShape.circle),
+              selectedDecoration: BoxDecoration(color: colorScheme.primary, shape: BoxShape.circle),
+              todayDecoration: BoxDecoration(color: colorScheme.primaryContainer, shape: BoxShape.circle),
+            ),
           ),
         ),
-        const Divider(height: 1),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Events on ${DateFormat.MMMd().format(selected)}',
+              style: Theme.of(context)
+                  .textTheme
+                  .labelLarge
+                  ?.copyWith(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ),
         Expanded(
           child: dayEvents.isEmpty
               ? const EmptyState(icon: Icons.event_busy_outlined, message: 'No events on this day.')
               : ListView.separated(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                   itemCount: dayEvents.length,
                   separatorBuilder: (context, index) => const SizedBox(height: 8),
                   itemBuilder: (context, index) => _EventTile(event: dayEvents[index]),
@@ -130,6 +184,13 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
         ),
       ],
     );
+  }
+
+  String _dateGroupLabel(DateTime date) {
+    final now = DateTime.now();
+    if (isSameDay(date, now)) return 'Today';
+    if (isSameDay(date, now.add(const Duration(days: 1)))) return 'Tomorrow';
+    return DateFormat('EEEE, MMM d').format(date);
   }
 
   Widget _buildUpcomingTab(List<ClubEvent> events) {
@@ -140,11 +201,33 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
     if (upcoming.isEmpty) {
       return const EmptyState(icon: Icons.event_busy_outlined, message: 'No upcoming events.');
     }
-    return ListView.separated(
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final labelStyle = Theme.of(context)
+        .textTheme
+        .labelLarge
+        ?.copyWith(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600);
+
+    final items = <Widget>[];
+    String? lastLabel;
+    for (final event in upcoming) {
+      final label = _dateGroupLabel(event.startTime);
+      if (label != lastLabel) {
+        items.add(
+          Padding(
+            padding: EdgeInsets.fromLTRB(8, items.isEmpty ? 0 : 16, 8, 8),
+            child: Text(label, style: labelStyle),
+          ),
+        );
+        lastLabel = label;
+      }
+      items.add(Padding(padding: const EdgeInsets.only(bottom: 8), child: _EventTile(event: event)));
+    }
+
+    return ListView.builder(
       padding: const EdgeInsets.all(12),
-      itemCount: upcoming.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 8),
-      itemBuilder: (context, index) => _EventTile(event: upcoming[index]),
+      itemCount: items.length,
+      itemBuilder: (context, index) => items[index],
     );
   }
 }
@@ -157,7 +240,6 @@ class _EventTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final progress = event.needsVolunteers ? ref.watch(eventVolunteerProgressProvider(event.id)) : null;
-    final colorScheme = Theme.of(context).colorScheme;
 
     return Card(
       child: ListTile(
@@ -171,15 +253,10 @@ class _EventTile extends ConsumerWidget {
               '${DateFormat.MMMd().add_jm().format(event.startTime)}'
               '${event.location.isNotEmpty ? ' · ${event.location}' : ''}',
             ),
-            if (progress != null)
-              Text(
-                progress.filled >= progress.capacity
-                    ? 'Volunteers: Full'
-                    : '${progress.filled} of ${progress.capacity} volunteer spots filled',
-                style: TextStyle(
-                  color: progress.filled >= progress.capacity ? colorScheme.error : colorScheme.onSurfaceVariant,
-                ),
-              ),
+            if (progress != null) ...[
+              const SizedBox(height: 6),
+              CapacityBar(filled: progress.filled, capacity: progress.capacity),
+            ],
           ],
         ),
       ),

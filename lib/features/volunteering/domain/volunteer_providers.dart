@@ -48,30 +48,31 @@ class LeaderboardEntry {
 /// Total volunteer hours per member, derived from every past event a member
 /// signed up for. An event only counts once per member even if they signed
 /// up for more than one of its slots.
-final volunteerHoursProvider = Provider<AsyncValue<Map<String, double>>>((ref) {
-  final eventsAsync = ref.watch(eventsProvider);
+///
+/// Every event this looks at has already ended (its sign-up counts can't
+/// change anymore), so this reads each one's slots once via [getSlotsOnce]
+/// instead of opening a live listener per event — with a growing event
+/// history, a live listener per past event forever is exactly the kind of
+/// unbounded fan-out that made Home/Directory (which both depend on this,
+/// via the leaderboard/top-volunteer badge) slow to load.
+final volunteerHoursProvider = FutureProvider<Map<String, double>>((ref) async {
+  final events = await ref.watch(eventsProvider.future);
+  final repo = ref.watch(volunteerRepositoryProvider);
   final now = DateTime.now();
 
-  return eventsAsync.when(
-    data: (events) {
-      final hoursByUid = <String, double>{};
-      for (final event in events.where((e) => e.needsVolunteers && e.endTime.isBefore(now))) {
-        final slots = ref.watch(eventSlotsProvider(event.id)).value;
-        if (slots == null) continue;
-        final signedUpUids = <String>{};
-        for (final slot in slots) {
-          signedUpUids.addAll(slot.signedUpUserIds);
-        }
-        final hours = event.endTime.difference(event.startTime).inMinutes / 60;
-        for (final uid in signedUpUids) {
-          hoursByUid[uid] = (hoursByUid[uid] ?? 0) + hours;
-        }
-      }
-      return AsyncValue.data(hoursByUid);
-    },
-    loading: () => const AsyncValue.loading(),
-    error: AsyncValue.error,
-  );
+  final hoursByUid = <String, double>{};
+  for (final event in events.where((e) => e.needsVolunteers && e.endTime.isBefore(now))) {
+    final slots = await repo.getSlotsOnce(event.id);
+    final signedUpUids = <String>{};
+    for (final slot in slots) {
+      signedUpUids.addAll(slot.signedUpUserIds);
+    }
+    final hours = event.endTime.difference(event.startTime).inMinutes / 60;
+    for (final uid in signedUpUids) {
+      hoursByUid[uid] = (hoursByUid[uid] ?? 0) + hours;
+    }
+  }
+  return hoursByUid;
 });
 
 /// All approved members with at least one volunteer hour, ranked highest
@@ -93,17 +94,21 @@ final topVolunteerUidsProvider = Provider<Set<String>>((ref) {
   return ref.watch(volunteerLeaderboardProvider).take(3).map((e) => e.member.uid).toSet();
 });
 
-/// The signed-in member's volunteer sign-ups across all events, derived by
-/// watching every volunteer-eligible event's slots and keeping the ones that
-/// include their uid.
+/// The signed-in member's volunteer sign-ups for events that haven't
+/// happened yet, derived by watching each such event's slots live and
+/// keeping the ones that include their uid. Past commitments are excluded —
+/// they can't be cancelled from here anyway (see `my_commitments_screen.dart`),
+/// and excluding them keeps this bounded to the small, roughly-constant set
+/// of upcoming events instead of the club's entire event history.
 final myCommitmentsProvider = Provider<AsyncValue<List<MyCommitment>>>((ref) {
   final myUid = ref.watch(currentAppUserProvider).value?.uid;
   final eventsAsync = ref.watch(eventsProvider);
+  final now = DateTime.now();
 
   return eventsAsync.when(
     data: (events) {
       final commitments = <MyCommitment>[];
-      for (final event in events.where((e) => e.needsVolunteers)) {
+      for (final event in events.where((e) => e.needsVolunteers && e.endTime.isAfter(now))) {
         final slots = ref.watch(eventSlotsProvider(event.id)).value;
         if (slots == null || myUid == null) continue;
         for (final slot in slots) {

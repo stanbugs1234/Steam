@@ -4,7 +4,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/utils/avatar_image.dart';
+import '../../../core/widgets/admin_badge.dart';
+import '../../../core/widgets/capacity_bar.dart';
+import '../../../core/widgets/dues_paid_badge.dart';
+import '../../../core/widgets/new_member_badge.dart';
 import '../../../core/widgets/section_card.dart';
+import '../../../core/widgets/top_volunteer_badge.dart';
+import '../../../models/app_user.dart';
+import '../../attendance/domain/attendance_providers.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../../events/domain/event_providers.dart';
 import '../../news/domain/news_providers.dart';
@@ -18,14 +26,25 @@ class HomeDashboardScreen extends ConsumerWidget {
 
   final ValueChanged<int> onNavigateToTab;
 
+  static String _initials(String name) {
+    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts.first[0].toUpperCase();
+    return (parts.first[0] + parts.last[0]).toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final appUser = ref.watch(currentAppUserProvider).value;
     final isAdmin = appUser?.isAdmin ?? false;
+    final isTopVolunteer = appUser != null && ref.watch(topVolunteerUidsProvider).contains(appUser.uid);
     final eventsAsync = ref.watch(eventsProvider);
     final newsAsync = ref.watch(newsFeedProvider);
     final commitmentsAsync = ref.watch(myCommitmentsProvider);
+    final myCheckIns = ref.watch(myCheckInsProvider).value ?? const [];
+    final totalPoints = myCheckIns.fold<int>(0, (sum, r) => sum + r.points);
     final now = DateTime.now();
+    final colorScheme = Theme.of(context).colorScheme;
 
     // Only block the data-dependent sections on a true first load — once a
     // stream has ever delivered data, later live updates shouldn't re-flash
@@ -42,6 +61,8 @@ class HomeDashboardScreen extends ConsumerWidget {
         .sortedBy((e) => e.startTime);
     final nextEvent = upcomingEvents.firstOrNull;
     final volunteersNeededCount = upcomingEvents.where((e) => e.needsVolunteers).length;
+    final nextEventProgress =
+        nextEvent != null && nextEvent.needsVolunteers ? ref.watch(eventVolunteerProgressProvider(nextEvent.id)) : null;
 
     final upcomingCommitments = (commitmentsAsync.value ?? const [])
         .where((c) => c.event.endTime.isAfter(now))
@@ -58,210 +79,394 @@ class HomeDashboardScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('Home')),
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+        padding: EdgeInsets.zero,
         children: [
-          Text(
-            firstName != null ? 'Welcome back, $firstName' : 'Welcome back',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Here\'s what\'s happening with STEAM Club.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: _QuickAction(
-                  icon: Icons.article_outlined,
-                  label: 'News',
-                  onTap: () => onNavigateToTab(1),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _QuickAction(
-                  icon: Icons.calendar_today_outlined,
-                  label: 'Events',
-                  onTap: () => onNavigateToTab(2),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _QuickAction(
-                  icon: Icons.volunteer_activism_outlined,
-                  label: 'Volunteer',
-                  onTap: () => onNavigateToTab(3),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _QuickAction(
-                  icon: Icons.people_outline,
-                  label: 'Directory',
-                  onTap: () => onNavigateToTab(4),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _QuickAction(
-                  icon: Icons.qr_code_scanner,
-                  label: 'Check In',
-                  onTap: () => context.push('/checkin'),
-                ),
-              ),
-            ],
-          ),
-          if (isInitialLoading)
-            const Padding(
-              padding: EdgeInsets.only(top: 48),
-              child: Center(child: CircularProgressIndicator()),
+          if (appUser != null)
+            _HomeHeader(
+              appUser: appUser,
+              isTopVolunteer: isTopVolunteer,
+              firstName: firstName,
             )
-          else ...[
-            if (isAdmin && pendingCount > 0) ...[
-              const SizedBox(height: 24),
-              SectionCard(
-                title: 'Pending Approvals',
-                icon: Icons.fact_check_outlined,
-                padding: EdgeInsets.zero,
-                children: [
-                  ListTile(
-                    title: Text(
-                      pendingCount == 1
-                          ? '1 request waiting for review'
-                          : '$pendingCount requests waiting for review',
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => context.push('/admin/approvals'),
-                  ),
-                ],
+          else
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+              child: Text(
+                'Welcome back',
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
               ),
-            ],
-            if (upcomingCommitments.isNotEmpty) ...[
-              const SizedBox(height: 24),
-              SectionCard(
-                title: 'Your Volunteer Shifts',
-                icon: Icons.event_available_outlined,
-                padding: EdgeInsets.zero,
-                children: [
-                  for (var i = 0; i < upcomingCommitments.length && i < 3; i++) ...[
-                    if (i > 0) const Divider(height: 1),
-                    ListTile(
-                      title: Text(upcomingCommitments[i].event.title),
-                      subtitle: Text(
-                        '${upcomingCommitments[i].slot.label} · '
-                        '${DateFormat.MMMEd().add_jm().format(upcomingCommitments[i].event.startTime)}',
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                if (appUser != null) ...[
+                  InkWell(
+                    borderRadius: BorderRadius.circular(12),
+                    onTap: () => onNavigateToTab(5),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: _HomeStatTile(
+                            icon: Icons.star_outline,
+                            value: '$totalPoints',
+                            label: totalPoints == 1 ? 'Point' : 'Points',
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _HomeStatTile(
+                            icon: appUser.duesPaid ? Icons.check_circle_outline : Icons.cancel_outlined,
+                            value: appUser.duesPaid ? 'Paid' : 'Not Paid',
+                            label: 'Dues',
+                            valueColor: appUser.duesPaid ? Colors.green.shade700 : colorScheme.error,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _HomeStatTile(
+                            icon: Icons.calendar_today_outlined,
+                            value: appUser.createdAt != null ? DateFormat('y').format(appUser.createdAt!) : '—',
+                            label: 'Member since',
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                ],
+                Row(
+                  children: [
+                    Expanded(
+                      child: _QuickAction(
+                        icon: Icons.article_outlined,
+                        label: 'News',
+                        onTap: () => onNavigateToTab(1),
                       ),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => context.push('/events/${upcomingCommitments[i].event.id}'),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _QuickAction(
+                        icon: Icons.calendar_today_outlined,
+                        label: 'Events',
+                        onTap: () => onNavigateToTab(2),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _QuickAction(
+                        icon: Icons.volunteer_activism_outlined,
+                        label: 'Volunteer',
+                        onTap: () => onNavigateToTab(3),
+                        badgeCount: volunteersNeededCount,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _QuickAction(
+                        icon: Icons.people_outline,
+                        label: 'Directory',
+                        onTap: () => onNavigateToTab(4),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _QuickAction(
+                        icon: Icons.qr_code_scanner,
+                        label: 'Check In',
+                        onTap: () => context.push('/checkin'),
+                      ),
                     ),
                   ],
-                ],
-              ),
-            ],
-            const SizedBox(height: 24),
-            if (nextEvent != null)
-              SectionCard(
-                title: 'Next Event',
-                icon: Icons.calendar_today_outlined,
-                padding: EdgeInsets.zero,
-                children: [
-                  ListTile(
-                    title: Text(nextEvent.title),
-                    subtitle: Text(DateFormat.MMMEd().add_jm().format(nextEvent.startTime)),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => context.push('/events/${nextEvent.id}'),
-                  ),
-                ],
-              )
-            else
-              SectionCard(
-                title: 'Next Event',
-                icon: Icons.calendar_today_outlined,
-                padding: EdgeInsets.zero,
-                children: const [
-                  ListTile(title: Text('No upcoming events right now.')),
-                ],
-              ),
-            if (volunteersNeededCount > 0) ...[
-              const SizedBox(height: 16),
-              SectionCard(
-                title: 'Volunteers Needed',
-                icon: Icons.volunteer_activism_outlined,
-                padding: EdgeInsets.zero,
-                children: [
-                  ListTile(
-                    title: Text(
-                      volunteersNeededCount == 1
-                          ? '1 upcoming event could use your help'
-                          : '$volunteersNeededCount upcoming events could use your help',
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => onNavigateToTab(2),
-                  ),
-                ],
-              ),
-            ],
-            if (topVolunteers.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              SectionCard(
-                title: 'Top Volunteers',
-                icon: Icons.emoji_events_outlined,
-                padding: EdgeInsets.zero,
-                trailing: TextButton(
-                  onPressed: () => context.push('/leaderboard'),
-                  child: const Text('See all'),
                 ),
-                children: [
-                  for (var i = 0; i < topVolunteers.length; i++) ...[
-                    if (i > 0) const Divider(height: 1),
-                    ListTile(
-                      title: Text(topVolunteers[i].member.name, overflow: TextOverflow.ellipsis),
-                      subtitle: Text('${topVolunteers[i].hours.toStringAsFixed(1)} hrs'),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => context.push('/directory/${topVolunteers[i].member.uid}'),
+                if (isInitialLoading)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 48),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else ...[
+                  if (isAdmin && pendingCount > 0) ...[
+                    const SizedBox(height: 24),
+                    SectionCard(
+                      title: 'Pending Approvals',
+                      icon: Icons.fact_check_outlined,
+                      padding: EdgeInsets.zero,
+                      children: [
+                        ListTile(
+                          title: Text(
+                            pendingCount == 1
+                                ? '1 request waiting for review'
+                                : '$pendingCount requests waiting for review',
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => context.push('/admin/approvals'),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (upcomingCommitments.isNotEmpty) ...[
+                    const SizedBox(height: 24),
+                    SectionCard(
+                      title: 'Your Volunteer Shifts',
+                      icon: Icons.event_available_outlined,
+                      padding: EdgeInsets.zero,
+                      children: [
+                        for (var i = 0; i < upcomingCommitments.length && i < 3; i++) ...[
+                          if (i > 0) const Divider(height: 1),
+                          ListTile(
+                            title: Text(upcomingCommitments[i].event.title),
+                            subtitle: Text(
+                              '${upcomingCommitments[i].slot.label} · '
+                              '${DateFormat.MMMEd().add_jm().format(upcomingCommitments[i].event.startTime)}',
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => context.push('/events/${upcomingCommitments[i].event.id}'),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  if (nextEvent != null)
+                    SectionCard(
+                      title: 'Next Event',
+                      icon: Icons.calendar_today_outlined,
+                      padding: EdgeInsets.zero,
+                      children: [
+                        ListTile(
+                          title: Text(nextEvent.title),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${DateFormat.MMMEd().add_jm().format(nextEvent.startTime)}'
+                                '${nextEvent.location.isNotEmpty ? ' · ${nextEvent.location}' : ''}',
+                              ),
+                              if (nextEventProgress != null) ...[
+                                const SizedBox(height: 6),
+                                CapacityBar(filled: nextEventProgress.filled, capacity: nextEventProgress.capacity),
+                              ],
+                            ],
+                          ),
+                          trailing: const Icon(Icons.chevron_right),
+                          onTap: () => context.push('/events/${nextEvent.id}'),
+                        ),
+                      ],
+                    )
+                  else
+                    SectionCard(
+                      title: 'Next Event',
+                      icon: Icons.calendar_today_outlined,
+                      padding: EdgeInsets.zero,
+                      children: const [
+                        ListTile(title: Text('No upcoming events right now.')),
+                      ],
+                    ),
+                  if (topVolunteers.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    SectionCard(
+                      title: 'Top Volunteers',
+                      icon: Icons.emoji_events_outlined,
+                      padding: EdgeInsets.zero,
+                      trailing: TextButton(
+                        onPressed: () => context.push('/leaderboard'),
+                        child: const Text('See all'),
+                      ),
+                      children: [
+                        for (var i = 0; i < topVolunteers.length; i++) ...[
+                          if (i > 0) const Divider(height: 1),
+                          ListTile(
+                            leading: CircleAvatar(
+                              radius: 18,
+                              backgroundColor: colorScheme.primaryContainer,
+                              backgroundImage: topVolunteers[i].member.photoUrl != null
+                                  ? avatarImage(topVolunteers[i].member.photoUrl!, 18)
+                                  : null,
+                              child: topVolunteers[i].member.photoUrl == null
+                                  ? Text(
+                                      _initials(topVolunteers[i].member.name),
+                                      style: TextStyle(color: colorScheme.onPrimaryContainer, fontSize: 12),
+                                    )
+                                  : null,
+                            ),
+                            title: Text(topVolunteers[i].member.name, overflow: TextOverflow.ellipsis),
+                            subtitle: Text('${topVolunteers[i].hours.toStringAsFixed(1)} hrs'),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => context.push('/directory/${topVolunteers[i].member.uid}'),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                  if (recentPosts.isNotEmpty) ...[
+                    const SizedBox(height: 16),
+                    SectionCard(
+                      title: 'Latest News',
+                      icon: Icons.article_outlined,
+                      padding: EdgeInsets.zero,
+                      trailing: TextButton(
+                        onPressed: () => onNavigateToTab(1),
+                        child: const Text('See all'),
+                      ),
+                      children: [
+                        for (var i = 0; i < recentPosts.length; i++) ...[
+                          if (i > 0) const Divider(height: 1),
+                          ListTile(
+                            leading: ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: recentPosts[i].imageUrl != null
+                                  ? Image(
+                                      image: avatarImage(recentPosts[i].imageUrl!, 20),
+                                      width: 40,
+                                      height: 40,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : Container(
+                                      width: 40,
+                                      height: 40,
+                                      color: colorScheme.secondaryContainer,
+                                      child: Icon(
+                                        Icons.article_outlined,
+                                        size: 20,
+                                        color: colorScheme.onSecondaryContainer,
+                                      ),
+                                    ),
+                            ),
+                            title: Text(recentPosts[i].title, maxLines: 1, overflow: TextOverflow.ellipsis),
+                            subtitle: Text(recentPosts[i].body, maxLines: 2, overflow: TextOverflow.ellipsis),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => context.push('/news/${recentPosts[i].id}'),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ],
-              ),
-            ],
-            if (recentPosts.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              SectionCard(
-                title: 'Latest News',
-                icon: Icons.article_outlined,
-                padding: EdgeInsets.zero,
-                trailing: TextButton(
-                  onPressed: () => onNavigateToTab(1),
-                  child: const Text('See all'),
-                ),
-                children: [
-                  for (var i = 0; i < recentPosts.length; i++) ...[
-                    if (i > 0) const Divider(height: 1),
-                    ListTile(
-                      title: Text(recentPosts[i].title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                      subtitle: Text(recentPosts[i].body, maxLines: 2, overflow: TextOverflow.ellipsis),
-                      trailing: const Icon(Icons.chevron_right),
-                      onTap: () => context.push('/news/${recentPosts[i].id}'),
-                    ),
-                  ],
-                ],
-              ),
-            ],
-          ],
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 }
 
+class _HomeHeader extends StatelessWidget {
+  const _HomeHeader({required this.appUser, required this.isTopVolunteer, required this.firstName});
+
+  final AppUser appUser;
+  final bool isTopVolunteer;
+  final String? firstName;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+      color: colorScheme.primaryContainer,
+      child: Row(
+        children: [
+          Container(
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(color: colorScheme.shadow.withValues(alpha: 0.15), blurRadius: 12, offset: const Offset(0, 4)),
+              ],
+            ),
+            child: CircleAvatar(
+              radius: 32,
+              backgroundColor: colorScheme.surface,
+              backgroundImage: appUser.photoUrl != null ? avatarImage(appUser.photoUrl!, 32) : null,
+              child: appUser.photoUrl == null
+                  ? Text(
+                      HomeDashboardScreen._initials(appUser.name),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(color: colorScheme.onSurface),
+                    )
+                  : null,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  firstName != null ? 'Welcome back, $firstName' : 'Welcome back',
+                  style: Theme.of(context)
+                      .textTheme
+                      .headlineSmall
+                      ?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.onPrimaryContainer),
+                ),
+                if (appUser.isAdmin || isTopVolunteer || appUser.isNewMember || appUser.duesPaid) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: [
+                      if (appUser.isAdmin) const AdminBadge(),
+                      if (isTopVolunteer) const TopVolunteerBadge(),
+                      if (appUser.isNewMember) const NewMemberBadge(),
+                      if (appUser.duesPaid) const DuesPaidBadge(),
+                    ],
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HomeStatTile extends StatelessWidget {
+  const _HomeStatTile({required this.icon, required this.value, required this.label, this.valueColor});
+
+  final IconData icon;
+  final String value;
+  final String label;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Card(
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+        child: Column(
+          children: [
+            Icon(icon, color: valueColor ?? colorScheme.primary, size: 20),
+            const SizedBox(height: 6),
+            Text(
+              value,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: valueColor,
+                  ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colorScheme.onSurfaceVariant),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _QuickAction extends StatelessWidget {
-  const _QuickAction({required this.icon, required this.label, required this.onTap});
+  const _QuickAction({required this.icon, required this.label, required this.onTap, this.badgeCount = 0});
 
   final IconData icon;
   final String label;
   final VoidCallback onTap;
+  final int badgeCount;
 
   @override
   Widget build(BuildContext context) {
@@ -275,7 +480,11 @@ class _QuickAction extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 16),
           child: Column(
             children: [
-              Icon(icon, color: colorScheme.primary),
+              Badge.count(
+                count: badgeCount,
+                isLabelVisible: badgeCount > 0,
+                child: Icon(icon, color: colorScheme.primary),
+              ),
               const SizedBox(height: 6),
               Text(label, style: Theme.of(context).textTheme.labelMedium),
             ],

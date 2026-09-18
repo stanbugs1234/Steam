@@ -24,6 +24,14 @@ class VolunteerRepository {
         .map((snap) => snap.docs.map((d) => VolunteerSlot.fromFirestore(d.id, d.data())).toList());
   }
 
+  /// A one-time read, with no live listener — for events that have already
+  /// ended, whose sign-up counts can no longer change, so there's nothing to
+  /// watch for.
+  Future<List<VolunteerSlot>> getSlotsOnce(String eventId) async {
+    final snap = await _slotsRef(eventId).orderBy('label').get();
+    return snap.docs.map((d) => VolunteerSlot.fromFirestore(d.id, d.data())).toList();
+  }
+
   Future<void> createSlot(String eventId, VolunteerSlot slot) {
     return _slotsRef(eventId).doc(slot.id).set(slot.toFirestore());
   }
