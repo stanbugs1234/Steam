@@ -78,6 +78,16 @@ service cloud.firestore {
         && request.auth.token.phone_number != null
         && request.auth.token.phone_number == resource.data.phone
       );
+
+      // A member's own check-in history. Doc id is the eventId, so a repeat
+      // check-in is a Firestore "update" on an existing doc, which isn't
+      // permitted here — that's what makes a scanned code a one-time award.
+      match /attendance/{eventId} {
+        allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
+        allow create: if isSignedIn() && request.auth.uid == uid
+          && get(/databases/$(database)/documents/events/$(eventId)).data.checkInEnabled == true;
+        allow update, delete: if isAdmin();
+      }
     }
 
     match /news/{postId} {
@@ -86,8 +96,27 @@ service cloud.firestore {
     }
 
     match /events/{eventId} {
+      // Members may only add exactly their own uid to checkedInUserIds, and
+      // only when the event has check-in enabled; every other field on the
+      // event doc must stay unchanged. Admins can update anything.
+      function isSelfCheckInChange() {
+        return resource.data.checkInEnabled == true
+          && request.resource.data.title == resource.data.title
+          && request.resource.data.description == resource.data.description
+          && request.resource.data.location == resource.data.location
+          && request.resource.data.startTime == resource.data.startTime
+          && request.resource.data.endTime == resource.data.endTime
+          && request.resource.data.needsVolunteers == resource.data.needsVolunteers
+          && request.resource.data.checkInEnabled == resource.data.checkInEnabled
+          && request.resource.data.checkedInUserIds.size() == resource.data.checkedInUserIds.size() + 1
+          && request.resource.data.checkedInUserIds.hasAll(resource.data.checkedInUserIds)
+          && request.resource.data.checkedInUserIds.hasAll([request.auth.uid])
+          && !resource.data.checkedInUserIds.hasAll([request.auth.uid]);
+      }
+
       allow read: if isApprovedMember() || isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (isApprovedMember() && isSelfCheckInChange());
 
       // Members may only toggle their own membership in signedUpUserIds
       // (add or remove exactly their own uid, nothing else); admins manage

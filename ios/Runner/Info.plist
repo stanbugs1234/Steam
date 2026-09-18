@@ -52,7 +52,7 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Steam Club needs access to your photos so you can set a profile picture.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Steam Club needs access to your camera so you can take a profile picture.</string>
+	<string>Steam Club needs access to your camera so you can take a profile picture or scan a meeting check-in code.</string>
 	<!-- Defensive only: flutter_contacts' native.showCreator() is permissionless
 	     on both platforms, but some OS versions surface a permission prompt
 	     anyway for the "Add to Contacts" feature. -->

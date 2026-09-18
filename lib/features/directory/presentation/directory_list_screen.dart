@@ -1,11 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/utils/avatar_image.dart';
 import '../../../core/widgets/admin_badge.dart';
 import '../../../core/widgets/children_form_field.dart' show kGradeOptions;
+import '../../../core/widgets/dues_paid_badge.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_state.dart';
+import '../../../core/widgets/new_member_badge.dart';
 import '../../../core/widgets/top_volunteer_badge.dart';
 import '../../../models/app_user.dart';
 import '../../auth/domain/auth_providers.dart';
@@ -13,8 +18,10 @@ import '../../volunteering/domain/volunteer_providers.dart';
 
 final _directorySearchProvider = StateProvider<String>((ref) => '');
 final _directoryGradeFilterProvider = StateProvider<String?>((ref) => null);
+final _directoryNewMemberFilterProvider = StateProvider<bool>((ref) => false);
 
-String _digitsOnly(String s) => s.replaceAll(RegExp(r'\D'), '');
+final _nonDigits = RegExp(r'\D');
+String _digitsOnly(String s) => s.replaceAll(_nonDigits, '');
 
 class DirectoryListScreen extends ConsumerStatefulWidget {
   const DirectoryListScreen({super.key});
@@ -25,14 +32,24 @@ class DirectoryListScreen extends ConsumerStatefulWidget {
 
 class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
   final _searchCtrl = TextEditingController();
+  Timer? _debounce;
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchCtrl.dispose();
     super.dispose();
   }
 
+  void _onSearchChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      ref.read(_directorySearchProvider.notifier).state = value;
+    });
+  }
+
   void _clearSearch() {
+    _debounce?.cancel();
     _searchCtrl.clear();
     ref.read(_directorySearchProvider.notifier).state = '';
   }
@@ -42,6 +59,7 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
     final membersAsync = ref.watch(approvedMembersProvider);
     final query = ref.watch(_directorySearchProvider).trim().toLowerCase();
     final gradeFilter = ref.watch(_directoryGradeFilterProvider);
+    final onlyNewMembers = ref.watch(_directoryNewMemberFilterProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Member Directory')),
@@ -64,7 +82,7 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
                 border: const OutlineInputBorder(),
                 isDense: true,
               ),
-              onChanged: (value) => ref.read(_directorySearchProvider.notifier).state = value,
+              onChanged: _onSearchChanged,
             ),
           ),
           Padding(
@@ -84,6 +102,18 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
               onChanged: (value) => ref.read(_directoryGradeFilterProvider.notifier).state = value,
             ),
           ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: FilterChip(
+                avatar: const Icon(Icons.auto_awesome, size: 18),
+                label: const Text('New members only'),
+                selected: onlyNewMembers,
+                onSelected: (value) => ref.read(_directoryNewMemberFilterProvider.notifier).state = value,
+              ),
+            ),
+          ),
           Expanded(
             child: membersAsync.when(
               data: (members) {
@@ -94,15 +124,18 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
                       m.kids.any((k) => k.name.toLowerCase().contains(query)) ||
                       (queryDigits.isNotEmpty && _digitsOnly(m.phone).contains(queryDigits));
                   final matchesGrade = gradeFilter == null || m.kids.any((k) => k.grade == gradeFilter);
-                  return matchesQuery && matchesGrade;
+                  final matchesNewMember = !onlyNewMembers || m.isNewMember;
+                  return matchesQuery && matchesGrade && matchesNewMember;
                 }).toList();
 
                 if (filtered.isEmpty) {
                   return EmptyState(
                     icon: Icons.people_outline,
-                    message: gradeFilter == null
-                        ? 'No members found.'
-                        : 'No members found with a kid in $gradeFilter.',
+                    message: onlyNewMembers
+                        ? 'No new members found.'
+                        : gradeFilter == null
+                            ? 'No members found.'
+                            : 'No members found with a kid in $gradeFilter.',
                   );
                 }
 
@@ -114,7 +147,8 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
                         alignment: Alignment.centerLeft,
                         child: Text(
                           '${filtered.length} member${filtered.length == 1 ? '' : 's'}'
-                          '${gradeFilter == null ? '' : ' · $gradeFilter'}',
+                          '${gradeFilter == null ? '' : ' · $gradeFilter'}'
+                          '${onlyNewMembers ? ' · New' : ''}',
                           style: Theme.of(context).textTheme.labelLarge?.copyWith(
                                 color: Theme.of(context).colorScheme.onSurfaceVariant,
                                 fontWeight: FontWeight.w600,
@@ -127,7 +161,10 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
                         padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
                         itemCount: filtered.length,
                         separatorBuilder: (context, index) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) => _MemberTile(member: filtered[index]),
+                        itemBuilder: (context, index) => _MemberTile(
+                          key: ValueKey(filtered[index].uid),
+                          member: filtered[index],
+                        ),
                       ),
                     ),
                   ],
@@ -144,7 +181,7 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
 }
 
 class _MemberTile extends ConsumerWidget {
-  const _MemberTile({required this.member});
+  const _MemberTile({super.key, required this.member});
 
   final AppUser member;
 
@@ -171,25 +208,34 @@ class _MemberTile extends ConsumerWidget {
         leading: CircleAvatar(
           radius: 22,
           backgroundColor: colorScheme.primaryContainer,
-          backgroundImage: member.photoUrl != null ? NetworkImage(member.photoUrl!) : null,
+          backgroundImage: member.photoUrl != null ? avatarImage(member.photoUrl!, 22) : null,
           child: member.photoUrl == null
               ? Text(_initials(member.name), style: TextStyle(color: colorScheme.onPrimaryContainer))
               : null,
         ),
-        title: Row(
-          children: [
-            Flexible(child: Text(member.name, overflow: TextOverflow.ellipsis)),
-            if (member.isAdmin) ...[
-              const SizedBox(width: 8),
-              const AdminBadge(),
-            ],
-            if (isTopVolunteer) ...[
-              const SizedBox(width: 8),
-              const TopVolunteerBadge(),
-            ],
-          ],
-        ),
-        subtitle: kidsLabel.isNotEmpty ? Text(kidsLabel) : null,
+        title: Text(member.name, overflow: TextOverflow.ellipsis),
+        subtitle: (member.isAdmin || isTopVolunteer || member.isNewMember || member.duesPaid || kidsLabel.isNotEmpty)
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (member.isAdmin || isTopVolunteer || member.isNewMember || member.duesPaid)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4, bottom: 2),
+                      child: Wrap(
+                        spacing: 6,
+                        runSpacing: 4,
+                        children: [
+                          if (member.isAdmin) const AdminBadge(),
+                          if (isTopVolunteer) const TopVolunteerBadge(),
+                          if (member.isNewMember) const NewMemberBadge(),
+                          if (member.duesPaid) const DuesPaidBadge(),
+                        ],
+                      ),
+                    ),
+                  if (kidsLabel.isNotEmpty) Text(kidsLabel),
+                ],
+              )
+            : null,
         trailing: const Icon(Icons.chevron_right),
         onTap: () => context.push('/directory/${member.uid}'),
       ),

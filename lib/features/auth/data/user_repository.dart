@@ -136,6 +136,14 @@ class UserRepository {
     return _usersRef.doc(uid).update({'createdAt': Timestamp.fromDate(date)});
   }
 
+  Future<void> setDuesPaid(String uid, bool paid) {
+    return _usersRef.doc(uid).update({'duesPaid': paid});
+  }
+
+  Future<void> setIsNewMember(String uid, bool isNewMember) {
+    return _usersRef.doc(uid).update({'isNewMember': isNewMember});
+  }
+
   Future<void> updateProfile(String uid, Map<String, dynamic> fields) {
     return _usersRef.doc(uid).update(fields);
   }

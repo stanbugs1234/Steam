@@ -34,6 +34,7 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
   DateTime _start = _roundToNextHour(DateTime.now());
   DateTime _end = _roundToNextHour(DateTime.now()).add(const Duration(hours: 1));
   bool _needsVolunteers = false;
+  bool _checkInEnabled = false;
 
   ClubEvent? _loadedFor;
   List<VolunteerSlot> _existingSlots = const [];
@@ -57,6 +58,7 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
     _start = event.startTime;
     _end = event.endTime;
     _needsVolunteers = event.needsVolunteers;
+    _checkInEnabled = event.checkInEnabled;
   }
 
   // Slots stream in live (they change as members sign up), so only seed the
@@ -147,6 +149,12 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
           'startTime': Timestamp.fromDate(_start),
           'endTime': Timestamp.fromDate(_end),
           'needsVolunteers': _needsVolunteers,
+          'checkInEnabled': _checkInEnabled,
+          // Events created before this feature existed have no
+          // checkedInUserIds field at all; arrayUnion with an empty list
+          // initializes it to [] without disturbing any existing entries,
+          // which the check-in security rule depends on being present.
+          'checkedInUserIds': FieldValue.arrayUnion(const []),
         });
         if (writeSingleSlot) {
           if (_existingSlots.isEmpty) {
@@ -181,6 +189,7 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
           endTime: _end,
           needsVolunteers: _needsVolunteers,
           createdBy: me?.uid ?? '',
+          checkInEnabled: _checkInEnabled,
         ));
         if (writeSingleSlot) {
           await volunteerRepo.createSlot(
@@ -297,6 +306,14 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
                         title: const Text('Needs volunteers'),
                         value: _needsVolunteers,
                         onChanged: (v) => setState(() => _needsVolunteers = v),
+                      ),
+                      const Divider(height: 1),
+                      SwitchListTile(
+                        secondary: const Icon(Icons.qr_code_scanner),
+                        title: const Text('Enable check-in for this meeting'),
+                        subtitle: const Text('Members scan a QR code to check in and earn a point.'),
+                        value: _checkInEnabled,
+                        onChanged: (v) => setState(() => _checkInEnabled = v),
                       ),
                       if (_needsVolunteers) ...[
                         const Divider(height: 1),

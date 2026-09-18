@@ -17,22 +17,32 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   int _index = 0;
+  final Set<int> _visited = {0};
 
-  void _navigateToTab(int index) => setState(() => _index = index);
+  void _navigateToTab(int index) => setState(() {
+        _index = index;
+        _visited.add(index);
+      });
 
-  late final _tabs = [
-    HomeDashboardScreen(onNavigateToTab: _navigateToTab),
-    const NewsFeedScreen(),
-    const EventsScreen(),
-    const MyCommitmentsScreen(),
-    const DirectoryListScreen(),
-    const MyProfileScreen(),
+  late final List<Widget Function()> _tabBuilders = [
+    () => HomeDashboardScreen(onNavigateToTab: _navigateToTab),
+    () => const NewsFeedScreen(),
+    () => const EventsScreen(),
+    () => const MyCommitmentsScreen(),
+    () => const DirectoryListScreen(),
+    () => const MyProfileScreen(),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(index: _index, children: _tabs),
+      body: IndexedStack(
+        index: _index,
+        children: [
+          for (var i = 0; i < _tabBuilders.length; i++)
+            _visited.contains(i) ? _tabBuilders[i]() : const SizedBox.shrink(),
+        ],
+      ),
       bottomNavigationBar: NavigationBar(
         selectedIndex: _index,
         onDestinationSelected: _navigateToTab,

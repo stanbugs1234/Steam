@@ -32,6 +32,12 @@ class EventDetailScreen extends ConsumerWidget {
                 return Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (event.checkInEnabled)
+                      IconButton(
+                        icon: const Icon(Icons.qr_code_2),
+                        tooltip: 'Show check-in QR',
+                        onPressed: () => context.push('/events/${event.id}/qr'),
+                      ),
                     IconButton(
                       icon: const Icon(Icons.edit_outlined),
                       onPressed: () => context.push('/events/${event.id}/edit'),
@@ -117,6 +123,20 @@ class EventDetailScreen extends ConsumerWidget {
               if (event.needsVolunteers) ...[
                 const SizedBox(height: 16),
                 VolunteerSlotSection(event: event),
+              ],
+              if (event.checkInEnabled && isAdmin) ...[
+                const SizedBox(height: 16),
+                SectionCard(
+                  title: 'Attendance',
+                  icon: Icons.qr_code_scanner,
+                  padding: EdgeInsets.zero,
+                  children: [
+                    _InfoRow(
+                      icon: Icons.how_to_reg_outlined,
+                      text: '${event.checkedInUserIds.length} checked in',
+                    ),
+                  ],
+                ),
               ],
             ],
           );

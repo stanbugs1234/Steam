@@ -10,6 +10,8 @@ class ClubEvent {
   final bool needsVolunteers;
   final String createdBy;
   final DateTime? createdAt;
+  final bool checkInEnabled;
+  final List<String> checkedInUserIds;
 
   const ClubEvent({
     required this.id,
@@ -21,6 +23,8 @@ class ClubEvent {
     required this.needsVolunteers,
     required this.createdBy,
     this.createdAt,
+    this.checkInEnabled = false,
+    this.checkedInUserIds = const [],
   });
 
   factory ClubEvent.fromFirestore(String id, Map<String, dynamic> data) {
@@ -34,6 +38,8 @@ class ClubEvent {
       needsVolunteers: data['needsVolunteers'] as bool? ?? false,
       createdBy: data['createdBy'] as String? ?? '',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
+      checkInEnabled: data['checkInEnabled'] as bool? ?? false,
+      checkedInUserIds: List<String>.from(data['checkedInUserIds'] as List? ?? const []),
     );
   }
 
@@ -47,6 +53,8 @@ class ClubEvent {
       'needsVolunteers': needsVolunteers,
       'createdBy': createdBy,
       'createdAt': createdAt == null ? FieldValue.serverTimestamp() : Timestamp.fromDate(createdAt!),
+      'checkInEnabled': checkInEnabled,
+      'checkedInUserIds': checkedInUserIds,
     };
   }
 }

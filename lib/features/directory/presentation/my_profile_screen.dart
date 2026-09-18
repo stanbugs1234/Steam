@@ -6,12 +6,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../core/utils/avatar_image.dart';
 import '../../../core/utils/phone_format.dart';
 import '../../../core/widgets/children_form_field.dart';
 import '../../../core/widgets/error_state.dart';
 import '../../../core/widgets/section_card.dart';
 import '../../../models/app_user.dart';
 import '../../../models/child_info.dart';
+import '../../attendance/domain/attendance_providers.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../../notifications/domain/notification_providers.dart';
 import '../../volunteering/domain/volunteer_providers.dart';
@@ -130,6 +132,8 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
           if (user == null) return const SizedBox.shrink();
           _syncControllers(user);
           final myVolunteerHours = ref.watch(volunteerHoursProvider).value?[user.uid] ?? 0;
+          final myCheckIns = ref.watch(myCheckInsProvider).value ?? const [];
+          final totalPoints = myCheckIns.fold<int>(0, (sum, r) => sum + r.points);
 
           return Center(
             child: ConstrainedBox(
@@ -146,7 +150,7 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                           children: [
                             CircleAvatar(
                               radius: 48,
-                              backgroundImage: user.photoUrl != null ? NetworkImage(user.photoUrl!) : null,
+                              backgroundImage: user.photoUrl != null ? avatarImage(user.photoUrl!, 48) : null,
                               child: user.photoUrl == null
                                   ? Text(
                                       user.name.isNotEmpty ? user.name[0].toUpperCase() : '?',
@@ -236,6 +240,22 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                             subtitle: const Text('From past events you signed up to help with.'),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () => context.push('/leaderboard'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      SectionCard(
+                        title: 'Your Points',
+                        icon: Icons.emoji_events_outlined,
+                        padding: EdgeInsets.zero,
+                        children: [
+                          ListTile(
+                            title: Text('$totalPoints point${totalPoints == 1 ? '' : 's'} earned'),
+                            subtitle: Text(
+                              'From ${myCheckIns.length} meeting${myCheckIns.length == 1 ? '' : 's'} checked into.',
+                            ),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () => context.push('/my-checkins'),
                           ),
                         ],
                       ),

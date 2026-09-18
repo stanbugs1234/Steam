@@ -8,9 +8,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/utils/avatar_image.dart';
 import '../../../core/utils/phone_format.dart';
 import '../../../core/widgets/admin_badge.dart';
+import '../../../core/widgets/dues_paid_badge.dart';
 import '../../../core/widgets/error_state.dart';
+import '../../../core/widgets/new_member_badge.dart';
 import '../../../core/widgets/section_card.dart';
 import '../../../core/widgets/top_volunteer_badge.dart';
 import '../../../models/app_user.dart';
@@ -29,6 +32,8 @@ class MemberDetailScreen extends ConsumerStatefulWidget {
 class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
   bool _settingRole = false;
   bool _settingJoinDate = false;
+  bool _settingDues = false;
+  bool _settingNewMember = false;
 
   bool get _supportsContacts => !kIsWeb && (Platform.isIOS || Platform.isAndroid);
 
@@ -110,6 +115,36 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
     }
   }
 
+  Future<void> _setDuesPaid(AppUser member, bool paid) async {
+    setState(() => _settingDues = true);
+    try {
+      await ref.read(userRepositoryProvider).setDuesPaid(member.uid, paid);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update dues status: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _settingDues = false);
+    }
+  }
+
+  Future<void> _setIsNewMember(AppUser member, bool isNewMember) async {
+    setState(() => _settingNewMember = true);
+    try {
+      await ref.read(userRepositoryProvider).setIsNewMember(member.uid, isNewMember);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update new member status: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _settingNewMember = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final membersAsync = ref.watch(approvedMembersProvider);
@@ -149,7 +184,7 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
                       child: CircleAvatar(
                         radius: 56,
                         backgroundColor: colorScheme.surface,
-                        backgroundImage: member.photoUrl != null ? NetworkImage(member.photoUrl!) : null,
+                        backgroundImage: member.photoUrl != null ? avatarImage(member.photoUrl!, 56) : null,
                         child: member.photoUrl == null
                             ? Text(
                                 member.name.isNotEmpty ? member.name[0].toUpperCase() : '?',
@@ -174,6 +209,14 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
                     if (topVolunteerUids.contains(member.uid)) ...[
                       const SizedBox(height: 6),
                       const TopVolunteerBadge(),
+                    ],
+                    if (member.isNewMember) ...[
+                      const SizedBox(height: 6),
+                      const NewMemberBadge(),
+                    ],
+                    if (member.duesPaid) ...[
+                      const SizedBox(height: 6),
+                      const DuesPaidBadge(),
                     ],
                     if (_supportsContacts) ...[
                       const SizedBox(height: 20),
@@ -202,6 +245,22 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
                       label: 'Membership length',
                       value: _formatMembershipDuration(member.createdAt!),
                     ),
+                    if (member.memberNumber != null) ...[
+                      const Divider(height: 1),
+                      _InfoRow(
+                        icon: Icons.badge_outlined,
+                        label: 'Member #',
+                        value: member.memberNumber!,
+                      ),
+                    ],
+                    if (member.clubPoints != null) ...[
+                      const Divider(height: 1),
+                      _InfoRow(
+                        icon: Icons.star_outline,
+                        label: 'Club points',
+                        value: '${member.clubPoints}',
+                      ),
+                    ],
                   ],
                 ),
               ],
@@ -273,6 +332,20 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
                           ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                           : const Icon(Icons.edit_outlined),
                       onTap: _settingJoinDate ? null : () => _editJoinDate(member),
+                    ),
+                    const Divider(height: 1),
+                    SwitchListTile(
+                      title: const Text('Dues paid'),
+                      subtitle: const Text('Shows a "Dues Paid" badge on this member\'s profile.'),
+                      value: member.duesPaid,
+                      onChanged: _settingDues ? null : (value) => _setDuesPaid(member, value),
+                    ),
+                    const Divider(height: 1),
+                    SwitchListTile(
+                      title: const Text('New member'),
+                      subtitle: const Text('Shows a "New Member" badge on this member\'s profile.'),
+                      value: member.isNewMember,
+                      onChanged: _settingNewMember ? null : (value) => _setIsNewMember(member, value),
                     ),
                   ],
                 ),

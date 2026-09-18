@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/utils/avatar_image.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/top_volunteer_badge.dart';
 import '../domain/volunteer_providers.dart';
@@ -44,7 +45,7 @@ class VolunteerLeaderboardScreen extends ConsumerWidget {
                     leading: CircleAvatar(
                       radius: 22,
                       backgroundColor: colorScheme.primaryContainer,
-                      backgroundImage: entry.member.photoUrl != null ? NetworkImage(entry.member.photoUrl!) : null,
+                      backgroundImage: entry.member.photoUrl != null ? avatarImage(entry.member.photoUrl!, 22) : null,
                       child: entry.member.photoUrl == null
                           ? Text(_initials(entry.member.name), style: TextStyle(color: colorScheme.onPrimaryContainer))
                           : null,

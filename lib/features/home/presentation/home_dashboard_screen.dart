@@ -103,6 +103,14 @@ class HomeDashboardScreen extends ConsumerWidget {
                   onTap: () => onNavigateToTab(4),
                 ),
               ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _QuickAction(
+                  icon: Icons.qr_code_scanner,
+                  label: 'Check In',
+                  onTap: () => context.push('/checkin'),
+                ),
+              ),
             ],
           ),
           if (isInitialLoading)

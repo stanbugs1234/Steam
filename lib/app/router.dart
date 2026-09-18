@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/admin/presentation/approval_queue_screen.dart';
+import '../features/attendance/presentation/checkin_qr_screen.dart';
+import '../features/attendance/presentation/checkin_scanner_screen.dart';
+import '../features/attendance/presentation/my_checkins_screen.dart';
 import '../features/auth/domain/auth_providers.dart';
 import '../features/auth/presentation/denied_screen.dart';
 import '../features/auth/presentation/forgot_password_screen.dart';
@@ -63,7 +66,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           loc == '/news/new' ||
           loc == '/events/new' ||
           loc.endsWith('/edit') ||
-          loc.endsWith('/slots');
+          loc.endsWith('/slots') ||
+          loc.endsWith('/qr');
       if (adminOnly && !appUser.isAdmin) {
         return '/home';
       }
@@ -103,6 +107,12 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/events/:id/slots',
         builder: (context, state) => VolunteerSlotsAdminScreen(eventId: state.pathParameters['id']!),
       ),
+      GoRoute(
+        path: '/events/:id/qr',
+        builder: (context, state) => CheckInQrScreen(eventId: state.pathParameters['id']!),
+      ),
+      GoRoute(path: '/checkin', builder: (context, state) => const CheckInScannerScreen()),
+      GoRoute(path: '/my-checkins', builder: (context, state) => const MyCheckInsScreen()),
       GoRoute(path: '/admin/approvals', builder: (context, state) => const ApprovalQueueScreen()),
       GoRoute(path: '/leaderboard', builder: (context, state) => const VolunteerLeaderboardScreen()),
     ],

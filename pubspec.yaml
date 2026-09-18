@@ -51,6 +51,8 @@ dependencies:
   url_launcher: ^6.3.2
   collection: ^1.19.1
   flutter_contacts: ^2.1.0
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^7.1.2
 
 dev_dependencies:
   flutter_test:

@@ -18,6 +18,10 @@ class AppUser {
   final DateTime? createdAt;
   final String? mergedFromId;
   final bool remindersEnabled;
+  final bool duesPaid;
+  final bool isNewMember;
+  final String? memberNumber;
+  final int? clubPoints;
 
   const AppUser({
     required this.uid,
@@ -31,6 +35,10 @@ class AppUser {
     this.createdAt,
     this.mergedFromId,
     this.remindersEnabled = true,
+    this.duesPaid = false,
+    this.isNewMember = false,
+    this.memberNumber,
+    this.clubPoints,
   });
 
   bool get isApproved => status == UserStatus.approved;
@@ -50,6 +58,10 @@ class AppUser {
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       mergedFromId: data['mergedFromId'] as String?,
       remindersEnabled: data['remindersEnabled'] as bool? ?? true,
+      duesPaid: data['duesPaid'] as bool? ?? false,
+      isNewMember: data['isNewMember'] as bool? ?? false,
+      memberNumber: data['memberNumber'] as String?,
+      clubPoints: data['clubPoints'] as int?,
     );
   }
 
@@ -88,6 +100,10 @@ class AppUser {
       'createdAt': createdAt == null ? FieldValue.serverTimestamp() : Timestamp.fromDate(createdAt!),
       'mergedFromId': mergedFromId,
       'remindersEnabled': remindersEnabled,
+      'duesPaid': duesPaid,
+      'isNewMember': isNewMember,
+      'memberNumber': memberNumber,
+      'clubPoints': clubPoints,
     };
   }
 
