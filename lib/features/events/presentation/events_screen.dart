@@ -79,6 +79,9 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
   Widget build(BuildContext context) {
     final eventsAsync = ref.watch(eventsProvider);
     final isAdmin = ref.watch(currentAppUserProvider).value?.isAdmin ?? false;
+    final myEventIds = <String>{
+      for (final c in ref.watch(myCommitmentsProvider).value ?? const <MyCommitment>[]) c.event.id,
+    };
 
     return Scaffold(
       appBar: AppBar(
@@ -103,8 +106,8 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
         data: (events) => TabBarView(
           controller: _tabController,
           children: [
-            _buildCalendarTab(events),
-            _buildUpcomingTab(events),
+            _buildCalendarTab(events, myEventIds),
+            _buildUpcomingTab(events, myEventIds),
           ],
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -113,7 +116,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
     );
   }
 
-  Widget _buildCalendarTab(List<ClubEvent> events) {
+  Widget _buildCalendarTab(List<ClubEvent> events, Set<String> myEventIds) {
     final colorScheme = Theme.of(context).colorScheme;
     final selected = _selectedDay ?? DateTime.now();
     final dayEvents = _eventsOnDay(events, selected);
@@ -157,19 +160,44 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
               selectedDecoration: BoxDecoration(color: colorScheme.primary, shape: BoxShape.circle),
               todayDecoration: BoxDecoration(color: colorScheme.primaryContainer, shape: BoxShape.circle),
             ),
+            calendarBuilders: CalendarBuilders<ClubEvent>(
+              markerBuilder: (context, day, dayEvents) {
+                if (dayEvents.isEmpty) return null;
+                // Mine first so the 3-dot cap never hides the volunteering marker.
+                final mine = dayEvents.where((e) => myEventIds.contains(e.id)).length;
+                final dots = dayEvents.length.clamp(0, 3);
+                return Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (var i = 0; i < dots; i++)
+                      _LegendDot(color: i < mine ? colorScheme.tertiary : colorScheme.primary, margin: 1),
+                  ],
+                );
+              },
+            ),
           ),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              'Events on ${DateFormat.MMMd().format(selected)}',
-              style: Theme.of(context)
-                  .textTheme
-                  .labelLarge
-                  ?.copyWith(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
-            ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  'Events on ${DateFormat.MMMd().format(selected)}',
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelLarge
+                      ?.copyWith(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
+                ),
+              ),
+              _LegendDot(color: colorScheme.primary),
+              const SizedBox(width: 4),
+              Text('Event', style: Theme.of(context).textTheme.labelSmall),
+              const SizedBox(width: 12),
+              _LegendDot(color: colorScheme.tertiary),
+              const SizedBox(width: 4),
+              Text("You're volunteering", style: Theme.of(context).textTheme.labelSmall),
+            ],
           ),
         ),
         Expanded(
@@ -179,7 +207,10 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
                   padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
                   itemCount: dayEvents.length,
                   separatorBuilder: (context, index) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) => _EventTile(event: dayEvents[index]),
+                  itemBuilder: (context, index) => _EventTile(
+                    event: dayEvents[index],
+                    signedUp: myEventIds.contains(dayEvents[index].id),
+                  ),
                 ),
         ),
       ],
@@ -193,7 +224,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
     return DateFormat('EEEE, MMM d').format(date);
   }
 
-  Widget _buildUpcomingTab(List<ClubEvent> events) {
+  Widget _buildUpcomingTab(List<ClubEvent> events, Set<String> myEventIds) {
     final now = DateTime.now();
     final upcoming = events.where((e) => e.endTime.isAfter(now)).toList()
       ..sort((a, b) => a.startTime.compareTo(b.startTime));
@@ -221,7 +252,12 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
         );
         lastLabel = label;
       }
-      items.add(Padding(padding: const EdgeInsets.only(bottom: 8), child: _EventTile(event: event)));
+      items.add(
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: _EventTile(event: event, signedUp: myEventIds.contains(event.id)),
+        ),
+      );
     }
 
     return ListView.builder(
@@ -232,10 +268,28 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
   }
 }
 
+class _LegendDot extends StatelessWidget {
+  const _LegendDot({required this.color, this.margin = 0});
+
+  final Color color;
+  final double margin;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 7,
+      height: 7,
+      margin: EdgeInsets.symmetric(horizontal: margin),
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
+}
+
 class _EventTile extends ConsumerWidget {
-  const _EventTile({required this.event});
+  const _EventTile({required this.event, required this.signedUp});
 
   final ClubEvent event;
+  final bool signedUp;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -253,12 +307,38 @@ class _EventTile extends ConsumerWidget {
               '${DateFormat.MMMd().add_jm().format(event.startTime)}'
               '${event.location.isNotEmpty ? ' · ${event.location}' : ''}',
             ),
+            if (signedUp) ...[
+              const SizedBox(height: 6),
+              _SignedUpChip(),
+            ],
             if (progress != null) ...[
               const SizedBox(height: 6),
               CapacityBar(filled: progress.filled, capacity: progress.capacity),
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SignedUpChip extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(color: colorScheme.tertiaryContainer, borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.check_circle, size: 14, color: colorScheme.onTertiaryContainer),
+          const SizedBox(width: 4),
+          Text(
+            "You're signed up",
+            style: TextStyle(fontSize: 11, color: colorScheme.onTertiaryContainer, fontWeight: FontWeight.w600),
+          ),
+        ],
       ),
     );
   }

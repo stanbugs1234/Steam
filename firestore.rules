@@ -37,6 +37,13 @@ service cloud.firestore {
           && request.auth.token.phone_number != null
           && request.auth.token.phone_number == resource.data.phone
         )
+        // Same idea for an email/password signup matching a placeholder's
+        // email.
+        || (
+          uid.matches('imported_.*')
+          && request.auth.token.email != null
+          && request.auth.token.email == resource.data.email
+        )
       );
 
       // Self-signup always starts as a pending member; role/status can't be
@@ -58,6 +65,15 @@ service cloud.firestore {
             && get(/databases/$(database)/documents/users/$(request.resource.data.mergedFromId)).data.phone == request.auth.token.phone_number
             && get(/databases/$(database)/documents/users/$(request.resource.data.mergedFromId)).data.status == 'approved'
           )
+          || (
+            request.auth.token.email != null
+            && request.resource.data.role == 'member'
+            && request.resource.data.status == 'approved'
+            && request.resource.data.mergedFromId is string
+            && request.resource.data.mergedFromId.matches('imported_.*')
+            && get(/databases/$(database)/documents/users/$(request.resource.data.mergedFromId)).data.email == request.auth.token.email
+            && get(/databases/$(database)/documents/users/$(request.resource.data.mergedFromId)).data.status == 'approved'
+          )
         );
 
       // Members may edit their own contact info but not their role/status.
@@ -69,14 +85,20 @@ service cloud.firestore {
         || isAdmin()
       );
 
-      // Admins can delete anyone. A phone-verified user may also delete the
-      // specific import placeholder they just claimed by matching phone,
-      // cleaning up the duplicate once merged into their real account.
+      // Admins can delete anyone. A phone- or email-verified user may also
+      // delete the specific import placeholder they just claimed by
+      // matching phone/email, cleaning up the duplicate once merged into
+      // their real account.
       allow delete: if isAdmin() || (
         uid.matches('imported_.*')
         && isSignedIn()
         && request.auth.token.phone_number != null
         && request.auth.token.phone_number == resource.data.phone
+      ) || (
+        uid.matches('imported_.*')
+        && isSignedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email == resource.data.email
       );
 
       // A member's own check-in history. Doc id is the eventId, so a repeat

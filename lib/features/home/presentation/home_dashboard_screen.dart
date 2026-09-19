@@ -12,6 +12,7 @@ import '../../../core/widgets/new_member_badge.dart';
 import '../../../core/widgets/section_card.dart';
 import '../../../core/widgets/top_volunteer_badge.dart';
 import '../../../models/app_user.dart';
+import '../../admin/presentation/pending_user_tile.dart';
 import '../../attendance/domain/attendance_providers.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../../events/domain/event_providers.dart';
@@ -42,7 +43,7 @@ class HomeDashboardScreen extends ConsumerWidget {
     final newsAsync = ref.watch(newsFeedProvider);
     final commitmentsAsync = ref.watch(myCommitmentsProvider);
     final myCheckIns = ref.watch(myCheckInsProvider).value ?? const [];
-    final totalPoints = myCheckIns.fold<int>(0, (sum, r) => sum + r.points);
+    final totalPoints = (appUser?.yearlyPoints ?? 0) + myCheckIns.fold<int>(0, (sum, r) => sum + r.points);
     final now = DateTime.now();
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -71,7 +72,7 @@ class HomeDashboardScreen extends ConsumerWidget {
     // Only admins are allowed to query pending users — security rules deny
     // this query outright for everyone else, so only watch it when it can
     // actually succeed.
-    final pendingCount = isAdmin ? (ref.watch(pendingUsersProvider).value?.length ?? 0) : 0;
+    final pendingUsers = isAdmin ? (ref.watch(pendingUsersProvider).value ?? const <AppUser>[]) : const <AppUser>[];
 
     final recentPosts = (newsAsync.value ?? const []).take(3).toList();
     final topVolunteers = ref.watch(volunteerLeaderboardProvider).take(3).toList();
@@ -179,31 +180,32 @@ class HomeDashboardScreen extends ConsumerWidget {
                     ),
                   ],
                 ),
+                if (isAdmin && pendingUsers.isNotEmpty) ...[
+                  const SizedBox(height: 24),
+                  SectionCard(
+                    title: pendingUsers.length == 1
+                        ? 'Pending Approvals · 1 request'
+                        : 'Pending Approvals · ${pendingUsers.length} requests',
+                    icon: Icons.fact_check_outlined,
+                    padding: EdgeInsets.zero,
+                    trailing: TextButton(
+                      onPressed: () => context.push('/admin/approvals'),
+                      child: const Text('See all'),
+                    ),
+                    children: [
+                      for (var i = 0; i < pendingUsers.length; i++) ...[
+                        if (i > 0) const Divider(height: 1),
+                        PendingUserTile(key: ValueKey(pendingUsers[i].uid), user: pendingUsers[i]),
+                      ],
+                    ],
+                  ),
+                ],
                 if (isInitialLoading)
                   const Padding(
                     padding: EdgeInsets.only(top: 48),
                     child: Center(child: CircularProgressIndicator()),
                   )
                 else ...[
-                  if (isAdmin && pendingCount > 0) ...[
-                    const SizedBox(height: 24),
-                    SectionCard(
-                      title: 'Pending Approvals',
-                      icon: Icons.fact_check_outlined,
-                      padding: EdgeInsets.zero,
-                      children: [
-                        ListTile(
-                          title: Text(
-                            pendingCount == 1
-                                ? '1 request waiting for review'
-                                : '$pendingCount requests waiting for review',
-                          ),
-                          trailing: const Icon(Icons.chevron_right),
-                          onTap: () => context.push('/admin/approvals'),
-                        ),
-                      ],
-                    ),
-                  ],
                   if (upcomingCommitments.isNotEmpty) ...[
                     const SizedBox(height: 24),
                     SectionCard(
@@ -333,7 +335,11 @@ class HomeDashboardScreen extends ConsumerWidget {
                                     ),
                             ),
                             title: Text(recentPosts[i].title, maxLines: 1, overflow: TextOverflow.ellipsis),
-                            subtitle: Text(recentPosts[i].body, maxLines: 2, overflow: TextOverflow.ellipsis),
+                            subtitle: Text(
+                              '${recentPosts[i].category.label} · ${recentPosts[i].body}',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () => context.push('/news/${recentPosts[i].id}'),
                           ),

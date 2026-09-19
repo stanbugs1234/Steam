@@ -61,119 +61,142 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
     final gradeFilter = ref.watch(_directoryGradeFilterProvider);
     final onlyNewMembers = ref.watch(_directoryNewMemberFilterProvider);
 
+    final resultSlivers = membersAsync.when(
+      data: (members) {
+        final queryDigits = _digitsOnly(query);
+        final filtered = members.where((m) {
+          final matchesQuery = query.isEmpty ||
+              m.name.toLowerCase().contains(query) ||
+              m.kids.any((k) => k.name.toLowerCase().contains(query)) ||
+              (queryDigits.isNotEmpty && _digitsOnly(m.phone).contains(queryDigits));
+          final matchesGrade = gradeFilter == null || m.kids.any((k) => k.grade == gradeFilter);
+          final matchesNewMember = !onlyNewMembers || m.isNewMember;
+          return matchesQuery && matchesGrade && matchesNewMember;
+        }).toList();
+
+        if (filtered.isEmpty) {
+          return <Widget>[
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: EmptyState(
+                icon: Icons.people_outline,
+                message: onlyNewMembers
+                    ? 'No new members found.'
+                    : gradeFilter == null
+                        ? 'No members found.'
+                        : 'No members found with a kid in $gradeFilter.',
+              ),
+            ),
+          ];
+        }
+
+        return <Widget>[
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  '${filtered.length} member${filtered.length == 1 ? '' : 's'}'
+                  '${gradeFilter == null ? '' : ' · $gradeFilter'}'
+                  '${onlyNewMembers ? ' · New' : ''}',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                      ),
+                ),
+              ),
+            ),
+          ),
+          SliverPadding(
+            padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+            sliver: SliverList.separated(
+              itemCount: filtered.length,
+              separatorBuilder: (context, index) => const SizedBox(height: 8),
+              itemBuilder: (context, index) => _MemberTile(
+                key: ValueKey(filtered[index].uid),
+                member: filtered[index],
+              ),
+            ),
+          ),
+        ];
+      },
+      loading: () => const <Widget>[
+        SliverFillRemaining(hasScrollBody: false, child: Center(child: CircularProgressIndicator())),
+      ],
+      error: (err, _) => <Widget>[
+        SliverFillRemaining(
+          hasScrollBody: false,
+          child: ErrorState(message: "Couldn't load the directory right now.", error: err),
+        ),
+      ],
+    );
+
     return Scaffold(
       appBar: AppBar(title: const Text('Member Directory')),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-            child: TextField(
-              controller: _searchCtrl,
-              decoration: InputDecoration(
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: query.isNotEmpty
-                    ? IconButton(
-                        icon: const Icon(Icons.clear),
-                        tooltip: 'Clear search',
-                        onPressed: _clearSearch,
-                      )
-                    : null,
-                hintText: 'Search by name, phone, or child\'s name',
-                border: const OutlineInputBorder(),
-                isDense: true,
-              ),
-              onChanged: _onSearchChanged,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: DropdownButtonFormField<String?>(
-              initialValue: gradeFilter,
-              decoration: const InputDecoration(
-                labelText: 'Filter by grade',
-                prefixIcon: Icon(Icons.filter_alt_outlined),
-                border: OutlineInputBorder(),
-                isDense: true,
-              ),
-              items: [
-                const DropdownMenuItem(value: null, child: Text('All Grades')),
-                for (final grade in kGradeOptions) DropdownMenuItem(value: grade, child: Text(grade)),
-              ],
-              onChanged: (value) => ref.read(_directoryGradeFilterProvider.notifier).state = value,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: FilterChip(
-                avatar: const Icon(Icons.auto_awesome, size: 18),
-                label: const Text('New members only'),
-                selected: onlyNewMembers,
-                onSelected: (value) => ref.read(_directoryNewMemberFilterProvider.notifier).state = value,
-              ),
-            ),
-          ),
-          Expanded(
-            child: membersAsync.when(
-              data: (members) {
-                final queryDigits = _digitsOnly(query);
-                final filtered = members.where((m) {
-                  final matchesQuery = query.isEmpty ||
-                      m.name.toLowerCase().contains(query) ||
-                      m.kids.any((k) => k.name.toLowerCase().contains(query)) ||
-                      (queryDigits.isNotEmpty && _digitsOnly(m.phone).contains(queryDigits));
-                  final matchesGrade = gradeFilter == null || m.kids.any((k) => k.grade == gradeFilter);
-                  final matchesNewMember = !onlyNewMembers || m.isNewMember;
-                  return matchesQuery && matchesGrade && matchesNewMember;
-                }).toList();
-
-                if (filtered.isEmpty) {
-                  return EmptyState(
-                    icon: Icons.people_outline,
-                    message: onlyNewMembers
-                        ? 'No new members found.'
-                        : gradeFilter == null
-                            ? 'No members found.'
-                            : 'No members found with a kid in $gradeFilter.',
-                  );
-                }
-
-                return Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          '${filtered.length} member${filtered.length == 1 ? '' : 's'}'
-                          '${gradeFilter == null ? '' : ' · $gradeFilter'}'
-                          '${onlyNewMembers ? ' · New' : ''}',
-                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                                fontWeight: FontWeight.w600,
-                              ),
-                        ),
+      body: CustomScrollView(
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        slivers: [
+          // Slides away when scrolling down and returns on any upward scroll (YouTube-style).
+          SliverFloatingHeader(
+            child: ColoredBox(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                    child: TextField(
+                      controller: _searchCtrl,
+                      decoration: InputDecoration(
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: query.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear),
+                                tooltip: 'Clear search',
+                                onPressed: _clearSearch,
+                              )
+                            : null,
+                        hintText: 'Search by name, phone, or child\'s name',
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      onChanged: _onSearchChanged,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    child: DropdownButtonFormField<String?>(
+                      initialValue: gradeFilter,
+                      decoration: const InputDecoration(
+                        labelText: 'Filter by grade',
+                        prefixIcon: Icon(Icons.filter_alt_outlined),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      items: [
+                        const DropdownMenuItem(value: null, child: Text('All Grades')),
+                        for (final grade in kGradeOptions) DropdownMenuItem(value: grade, child: Text(grade)),
+                      ],
+                      onChanged: (value) => ref.read(_directoryGradeFilterProvider.notifier).state = value,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: FilterChip(
+                        avatar: const Icon(Icons.auto_awesome, size: 18),
+                        label: const Text('New members only'),
+                        selected: onlyNewMembers,
+                        onSelected: (value) => ref.read(_directoryNewMemberFilterProvider.notifier).state = value,
                       ),
                     ),
-                    Expanded(
-                      child: ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
-                        itemCount: filtered.length,
-                        separatorBuilder: (context, index) => const SizedBox(height: 8),
-                        itemBuilder: (context, index) => _MemberTile(
-                          key: ValueKey(filtered[index].uid),
-                          member: filtered[index],
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (err, _) => ErrorState(message: "Couldn't load the directory right now.", error: err),
+                  ),
+                ],
+              ),
             ),
           ),
+          ...resultSlivers,
         ],
       ),
     );
@@ -228,7 +251,7 @@ class _MemberTile extends ConsumerWidget {
                           if (member.isAdmin) const AdminBadge(),
                           if (isTopVolunteer) const TopVolunteerBadge(),
                           if (member.isNewMember) const NewMemberBadge(),
-                          if (member.duesPaid) const DuesPaidBadge(),
+                          if (member.duesPaid) const DuesPaidBadge(iconOnly: true),
                         ],
                       ),
                     ),

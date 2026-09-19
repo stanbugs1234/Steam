@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/theme/app_theme.dart';
+import '../core/widgets/keyboard_dismiss_scope.dart';
 import 'router.dart';
 
 class SteamApp extends ConsumerWidget {
@@ -17,6 +18,7 @@ class SteamApp extends ConsumerWidget {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       routerConfig: router,
+      builder: (context, child) => KeyboardDismissScope(child: child ?? const SizedBox.shrink()),
     );
   }
 }

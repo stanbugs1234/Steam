@@ -46,6 +46,26 @@ class UserRepository {
     return AppUser.fromFirestore(doc.id, doc.data());
   }
 
+  /// Mirrors [findApprovedPlaceholderByPhone] for the email signup path.
+  /// Matched by exact string equality (not case-folded) since that's what the
+  /// Firestore rule checks against `request.auth.token.email` too — if a
+  /// roster entry's email casing doesn't match what the member types at
+  /// signup, this just misses and they fall through to a normal pending
+  /// signup rather than failing outright.
+  Future<AppUser?> findApprovedPlaceholderByEmail(String email) async {
+    final trimmed = email.trim();
+    if (trimmed.isEmpty) return null;
+    final snap = await _usersRef
+        .where('email', isEqualTo: trimmed)
+        .where('status', isEqualTo: UserStatus.approved.name)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    final doc = snap.docs.first;
+    if (!doc.id.startsWith('imported_')) return null;
+    return AppUser.fromFirestore(doc.id, doc.data());
+  }
+
   Future<void> deletePlaceholder(String docId) => _usersRef.doc(docId).delete();
 
   /// Scans approved-status docs (real members and unclaimed `imported_*`

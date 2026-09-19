@@ -9,6 +9,8 @@ import '../../../core/widgets/section_card.dart';
 import '../../../models/club_event.dart';
 import '../../attendance/domain/attendance_providers.dart';
 import '../../auth/domain/auth_providers.dart';
+import '../../sharing/share_content.dart';
+import '../../sharing/share_sheet.dart';
 import '../../volunteering/presentation/volunteer_slot_section.dart';
 import '../domain/event_providers.dart';
 
@@ -59,6 +61,11 @@ class EventDetailScreen extends ConsumerWidget {
               return Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  IconButton(
+                    icon: const Icon(Icons.ios_share),
+                    tooltip: 'Share',
+                    onPressed: () => showShareSheet(context, ShareContent.fromEvent(event)),
+                  ),
                   if (_canUseCheckIn(event))
                     IconButton(
                       icon: const Icon(Icons.qr_code_2),

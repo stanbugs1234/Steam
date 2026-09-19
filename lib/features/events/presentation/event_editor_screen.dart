@@ -247,6 +247,7 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
           child: SingleChildScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.all(24),
             child: Form(
               key: _formKey,

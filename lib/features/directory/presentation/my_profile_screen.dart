@@ -133,12 +133,15 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
           _syncControllers(user);
           final myVolunteerHours = ref.watch(volunteerHoursProvider).value?[user.uid] ?? 0;
           final myCheckIns = ref.watch(myCheckInsProvider).value ?? const [];
-          final totalPoints = myCheckIns.fold<int>(0, (sum, r) => sum + r.points);
+          final rosterPoints = user.yearlyPoints ?? 0;
+          final checkInPoints = myCheckIns.fold<int>(0, (sum, r) => sum + r.points);
+          final totalPoints = rosterPoints + checkInPoints;
 
           return Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 480),
               child: SingleChildScrollView(
+                keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
                 padding: const EdgeInsets.all(24),
                 child: Form(
                   key: _formKey,
@@ -252,7 +255,8 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                           ListTile(
                             title: Text('$totalPoints point${totalPoints == 1 ? '' : 's'} earned'),
                             subtitle: Text(
-                              'From ${myCheckIns.length} meeting${myCheckIns.length == 1 ? '' : 's'} checked into.',
+                              '$rosterPoints from the club roster + $checkInPoints from '
+                              '${myCheckIns.length} meeting${myCheckIns.length == 1 ? '' : 's'} checked into.',
                             ),
                             trailing: const Icon(Icons.chevron_right),
                             onTap: () => context.push('/my-checkins'),

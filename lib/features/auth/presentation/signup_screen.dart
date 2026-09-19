@@ -97,22 +97,47 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       final authRepo = ref.read(authRepositoryProvider);
       final userRepo = ref.read(userRepositoryProvider);
 
+      final email = _emailCtrl.text.trim();
       final credential = await authRepo.signUp(
-        email: _emailCtrl.text.trim(),
+        email: email,
         password: _passwordCtrl.text,
       );
       final uid = credential.user!.uid;
 
+      AppUser? placeholder;
+      try {
+        placeholder = await userRepo.findApprovedPlaceholderByEmail(email);
+      } catch (_) {
+        // If the lookup fails for any reason, fall through to a normal
+        // pending signup rather than blocking account creation.
+        placeholder = null;
+      }
+
+      final phone = _phoneCtrl.text.trim();
       await userRepo.createProfile(AppUser(
         uid: uid,
         name: _nameCtrl.text.trim(),
-        email: _emailCtrl.text.trim(),
-        phone: _phoneCtrl.text.trim(),
-        kids: _kids,
+        email: email,
+        phone: phone.isNotEmpty ? phone : (placeholder?.phone ?? ''),
+        kids: _kids.isNotEmpty ? _kids : (placeholder?.kids ?? const []),
         role: UserRole.member,
-        status: UserStatus.pending,
+        status: placeholder != null ? UserStatus.approved : UserStatus.pending,
+        mergedFromId: placeholder?.uid,
+        // Preserve the placeholder's original join date on merge — otherwise
+        // toFirestore() would stamp today's date and lose their real tenure.
+        createdAt: placeholder?.createdAt,
       ));
-      // Router redirect will move to /pending-approval automatically.
+
+      if (placeholder != null) {
+        try {
+          await userRepo.deletePlaceholder(placeholder.uid);
+        } catch (_) {
+          // Non-fatal: the real account was already created successfully;
+          // a leftover placeholder just needs manual cleanup by an admin.
+        }
+      }
+      // Router redirect will move to /pending-approval (or straight to
+      // /home if merged as approved) automatically.
     } on FirebaseAuthException catch (e) {
       setState(() => _errorText = e.message ?? 'Could not create account.');
     } catch (e) {
@@ -535,6 +560,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 480),
             child: SingleChildScrollView(
+              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.all(24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,

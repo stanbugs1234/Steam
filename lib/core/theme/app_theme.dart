@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 /// actually stands out instead of competing with a colorful background.
 const _accentSeed = Color(0xFF0F5C4C);
 
+/// The brand accent, for branded artwork (e.g. the share flyer) that must look
+/// the same in light and dark mode.
+const brandAccent = _accentSeed;
+
 class AppTheme {
   static ThemeData light() => _build(_lightColorScheme());
 

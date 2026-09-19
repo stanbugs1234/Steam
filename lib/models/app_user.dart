@@ -22,6 +22,7 @@ class AppUser {
   final bool isNewMember;
   final String? memberNumber;
   final int? clubPoints;
+  final int? yearlyPoints;
 
   const AppUser({
     required this.uid,
@@ -39,6 +40,7 @@ class AppUser {
     this.isNewMember = false,
     this.memberNumber,
     this.clubPoints,
+    this.yearlyPoints,
   });
 
   bool get isApproved => status == UserStatus.approved;
@@ -62,6 +64,7 @@ class AppUser {
       isNewMember: data['isNewMember'] as bool? ?? false,
       memberNumber: data['memberNumber'] as String?,
       clubPoints: data['clubPoints'] as int?,
+      yearlyPoints: data['yearlyPoints'] as int?,
     );
   }
 
@@ -104,6 +107,7 @@ class AppUser {
       'isNewMember': isNewMember,
       'memberNumber': memberNumber,
       'clubPoints': clubPoints,
+      'yearlyPoints': yearlyPoints,
     };
   }
 
