@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../features/admin/presentation/approval_queue_screen.dart';
 import '../features/attendance/presentation/checkin_qr_screen.dart';
 import '../features/attendance/presentation/checkin_scanner_screen.dart';
-import '../features/attendance/presentation/my_checkins_screen.dart';
+import '../features/attendance/presentation/my_points_screen.dart';
 import '../features/auth/domain/auth_providers.dart';
 import '../features/auth/presentation/denied_screen.dart';
 import '../features/auth/presentation/forgot_password_screen.dart';
@@ -111,7 +111,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => CheckInQrScreen(eventId: state.pathParameters['id']!),
       ),
       GoRoute(path: '/checkin', builder: (context, state) => const CheckInScannerScreen()),
-      GoRoute(path: '/my-checkins', builder: (context, state) => const MyCheckInsScreen()),
+      GoRoute(path: '/my-points', builder: (context, state) => const MyPointsScreen()),
       GoRoute(path: '/admin/approvals', builder: (context, state) => const ApprovalQueueScreen()),
       GoRoute(path: '/leaderboard', builder: (context, state) => const VolunteerLeaderboardScreen()),
     ],

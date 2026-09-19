@@ -132,10 +132,11 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
           if (user == null) return const SizedBox.shrink();
           _syncControllers(user);
           final myVolunteerHours = ref.watch(volunteerHoursProvider).value?[user.uid] ?? 0;
-          final myCheckIns = ref.watch(myCheckInsProvider).value ?? const [];
-          final rosterPoints = user.yearlyPoints ?? 0;
-          final checkInPoints = myCheckIns.fold<int>(0, (sum, r) => sum + r.points);
-          final totalPoints = rosterPoints + checkInPoints;
+          final points = ref.watch(myPointsSummaryProvider);
+          final rosterPoints = points.rosterPoints;
+          final checkInPoints = points.checkInPoints;
+          final totalPoints = points.total;
+          final myCheckIns = points.checkIns;
 
           return Center(
             child: ConstrainedBox(
@@ -259,7 +260,7 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                               '${myCheckIns.length} meeting${myCheckIns.length == 1 ? '' : 's'} checked into.',
                             ),
                             trailing: const Icon(Icons.chevron_right),
-                            onTap: () => context.push('/my-checkins'),
+                            onTap: () => context.push('/my-points'),
                           ),
                         ],
                       ),

@@ -45,34 +45,83 @@ class LeaderboardEntry {
   const LeaderboardEntry({required this.member, required this.hours});
 }
 
-/// Total volunteer hours per member, derived from every past event a member
-/// signed up for. An event only counts once per member even if they signed
-/// up for more than one of its slots.
+/// A volunteer-eligible event that has already ended, with its final slots.
+class PastVolunteerEvent {
+  final ClubEvent event;
+  final List<VolunteerSlot> slots;
+  const PastVolunteerEvent({required this.event, required this.slots});
+
+  double get hours => event.endTime.difference(event.startTime).inMinutes / 60;
+}
+
+/// Every past volunteer-eligible event with its slots, loaded once.
 ///
 /// Every event this looks at has already ended (its sign-up counts can't
 /// change anymore), so this reads each one's slots once via [getSlotsOnce]
 /// instead of opening a live listener per event — with a growing event
 /// history, a live listener per past event forever is exactly the kind of
 /// unbounded fan-out that made Home/Directory (which both depend on this,
-/// via the leaderboard/top-volunteer badge) slow to load.
-final volunteerHoursProvider = FutureProvider<Map<String, double>>((ref) async {
+/// via the leaderboard/top-volunteer badge) slow to load. Both the hours
+/// totals and a member's own volunteer record derive from this one read.
+final pastVolunteerEventsProvider = FutureProvider<List<PastVolunteerEvent>>((ref) async {
   final events = await ref.watch(eventsProvider.future);
   final repo = ref.watch(volunteerRepositoryProvider);
   final now = DateTime.now();
 
-  final hoursByUid = <String, double>{};
+  final past = <PastVolunteerEvent>[];
   for (final event in events.where((e) => e.needsVolunteers && e.endTime.isBefore(now))) {
-    final slots = await repo.getSlotsOnce(event.id);
+    past.add(PastVolunteerEvent(event: event, slots: await repo.getSlotsOnce(event.id)));
+  }
+  return past;
+});
+
+/// Total volunteer hours per member, derived from every past event a member
+/// signed up for. An event only counts once per member even if they signed
+/// up for more than one of its slots.
+final volunteerHoursProvider = FutureProvider<Map<String, double>>((ref) async {
+  final past = await ref.watch(pastVolunteerEventsProvider.future);
+
+  final hoursByUid = <String, double>{};
+  for (final entry in past) {
     final signedUpUids = <String>{};
-    for (final slot in slots) {
+    for (final slot in entry.slots) {
       signedUpUids.addAll(slot.signedUpUserIds);
     }
-    final hours = event.endTime.difference(event.startTime).inMinutes / 60;
     for (final uid in signedUpUids) {
-      hoursByUid[uid] = (hoursByUid[uid] ?? 0) + hours;
+      hoursByUid[uid] = (hoursByUid[uid] ?? 0) + entry.hours;
     }
   }
   return hoursByUid;
+});
+
+/// One past event the signed-in member volunteered for.
+class VolunteerRecord {
+  final ClubEvent event;
+  final List<String> slotLabels;
+  final double hours;
+  const VolunteerRecord({required this.event, required this.slotLabels, required this.hours});
+}
+
+/// The signed-in member's volunteer history — past events they were signed up
+/// for, newest first. Hours match what [volunteerHoursProvider] counts (once
+/// per event, however many of its slots they took).
+final myVolunteerRecordProvider = Provider<AsyncValue<List<VolunteerRecord>>>((ref) {
+  final myUid = ref.watch(currentAppUserProvider).value?.uid;
+  return ref.watch(pastVolunteerEventsProvider).whenData((past) {
+    if (myUid == null) return const <VolunteerRecord>[];
+    final records = <VolunteerRecord>[];
+    for (final entry in past) {
+      final mine = entry.slots.where((s) => s.signedUpUserIds.contains(myUid)).toList();
+      if (mine.isEmpty) continue;
+      records.add(VolunteerRecord(
+        event: entry.event,
+        slotLabels: [for (final s in mine) s.label],
+        hours: entry.hours,
+      ));
+    }
+    records.sort((a, b) => b.event.startTime.compareTo(a.event.startTime));
+    return records;
+  });
 });
 
 /// All approved members with at least one volunteer hour, ranked highest

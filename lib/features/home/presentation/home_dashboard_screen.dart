@@ -42,8 +42,7 @@ class HomeDashboardScreen extends ConsumerWidget {
     final eventsAsync = ref.watch(eventsProvider);
     final newsAsync = ref.watch(newsFeedProvider);
     final commitmentsAsync = ref.watch(myCommitmentsProvider);
-    final myCheckIns = ref.watch(myCheckInsProvider).value ?? const [];
-    final totalPoints = (appUser?.yearlyPoints ?? 0) + myCheckIns.fold<int>(0, (sum, r) => sum + r.points);
+    final totalPoints = ref.watch(myPointsSummaryProvider).total;
     final now = DateTime.now();
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -102,37 +101,37 @@ class HomeDashboardScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 if (appUser != null) ...[
-                  InkWell(
-                    borderRadius: BorderRadius.circular(12),
-                    onTap: () => onNavigateToTab(5),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _HomeStatTile(
-                            icon: Icons.star_outline,
-                            value: '$totalPoints',
-                            label: totalPoints == 1 ? 'Point' : 'Points',
-                          ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _HomeStatTile(
+                          icon: Icons.star_outline,
+                          value: '$totalPoints',
+                          label: totalPoints == 1 ? 'Point' : 'Points',
+                          showChevron: true,
+                          onTap: () => context.push('/my-points'),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _HomeStatTile(
-                            icon: appUser.duesPaid ? Icons.check_circle_outline : Icons.cancel_outlined,
-                            value: appUser.duesPaid ? 'Paid' : 'Not Paid',
-                            label: 'Dues',
-                            valueColor: appUser.duesPaid ? Colors.green.shade700 : colorScheme.error,
-                          ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _HomeStatTile(
+                          icon: appUser.duesPaid ? Icons.check_circle_outline : Icons.cancel_outlined,
+                          value: appUser.duesPaid ? 'Paid' : 'Not Paid',
+                          label: 'Dues',
+                          valueColor: appUser.duesPaid ? Colors.green.shade700 : colorScheme.error,
+                          onTap: () => onNavigateToTab(5),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _HomeStatTile(
-                            icon: Icons.calendar_today_outlined,
-                            value: appUser.createdAt != null ? DateFormat('y').format(appUser.createdAt!) : '—',
-                            label: 'Member since',
-                          ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: _HomeStatTile(
+                          icon: Icons.calendar_today_outlined,
+                          value: appUser.createdAt != null ? DateFormat('y').format(appUser.createdAt!) : '—',
+                          label: 'Member since',
+                          onTap: () => onNavigateToTab(5),
                         ),
-                      ],
-                    ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 20),
                 ],
@@ -428,38 +427,56 @@ class _HomeHeader extends StatelessWidget {
 }
 
 class _HomeStatTile extends StatelessWidget {
-  const _HomeStatTile({required this.icon, required this.value, required this.label, this.valueColor});
+  const _HomeStatTile({
+    required this.icon,
+    required this.value,
+    required this.label,
+    required this.onTap,
+    this.valueColor,
+    this.showChevron = false,
+  });
 
   final IconData icon;
   final String value;
   final String label;
   final Color? valueColor;
+  final VoidCallback onTap;
+
+  /// Hints that tapping opens more detail (used for Points).
+  final bool showChevron;
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final labelStyle = Theme.of(context).textTheme.labelSmall?.copyWith(color: colorScheme.onSurfaceVariant);
     return Card(
       margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-        child: Column(
-          children: [
-            Icon(icon, color: valueColor ?? colorScheme.primary, size: 20),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: valueColor,
-                  ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(color: colorScheme.onSurfaceVariant),
-            ),
-          ],
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+          child: Column(
+            children: [
+              Icon(icon, color: valueColor ?? colorScheme.primary, size: 20),
+              const SizedBox(height: 6),
+              Text(
+                value,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: valueColor,
+                    ),
+              ),
+              const SizedBox(height: 2),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(label, style: labelStyle),
+                  if (showChevron) Icon(Icons.chevron_right, size: 14, color: colorScheme.onSurfaceVariant),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
