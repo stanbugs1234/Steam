@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/utils/avatar_image.dart';
 import '../../../core/widgets/capacity_bar.dart';
 import '../../../core/widgets/section_card.dart';
+import '../../../models/app_user.dart';
 import '../../../models/club_event.dart';
 import '../../../models/volunteer_slot.dart';
 import '../../auth/domain/auth_providers.dart';
@@ -26,6 +28,11 @@ class VolunteerSlotSection extends ConsumerWidget {
     final appUser = ref.watch(currentAppUserProvider).value;
     final isAdmin = appUser?.isAdmin ?? false;
     final colorScheme = Theme.of(context).colorScheme;
+    // uid -> member, so each task can list *who* signed up rather than just how
+    // many. Null while the directory is still loading (or couldn't load), in
+    // which case a task shows its count only.
+    final members = ref.watch(approvedMembersProvider).valueOrNull;
+    final membersByUid = members == null ? null : {for (final m in members) m.uid: m};
 
     return SectionCard(
       title: 'Volunteer Slots',
@@ -61,6 +68,7 @@ class VolunteerSlotSection extends ConsumerWidget {
                     slot: slots[i],
                     myUid: appUser?.uid,
                     remindersEnabled: appUser?.remindersEnabled ?? true,
+                    membersByUid: membersByUid,
                   ),
                 ],
               ],
@@ -86,12 +94,14 @@ class _SlotTile extends ConsumerStatefulWidget {
     required this.slot,
     required this.myUid,
     required this.remindersEnabled,
+    required this.membersByUid,
   });
 
   final ClubEvent event;
   final VolunteerSlot slot;
   final String? myUid;
   final bool remindersEnabled;
+  final Map<String, AppUser>? membersByUid;
 
   @override
   ConsumerState<_SlotTile> createState() => _SlotTileState();
@@ -147,12 +157,35 @@ class _SlotTileState extends ConsumerState<_SlotTile> {
 
     return ListTile(
       title: Text(slot.label),
-      subtitle: _error != null
-          ? Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))
-          : Padding(
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_error != null)
+            Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error))
+          else
+            Padding(
               padding: const EdgeInsets.only(top: 6),
               child: CapacityBar(filled: slot.signedUpUserIds.length, capacity: slot.capacity),
             ),
+          if (slot.signedUpUserIds.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: VolunteerNames(
+                uids: slot.signedUpUserIds,
+                membersByUid: widget.membersByUid,
+                myUid: widget.myUid,
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'No one has signed up yet.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+              ),
+            ),
+        ],
+      ),
       trailing: _working
           ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
           : (signedUp
@@ -162,5 +195,64 @@ class _SlotTileState extends ConsumerState<_SlotTile> {
                   child: Text(ended ? 'Ended' : (slot.isFull ? 'Full' : 'Sign Up')),
                 )),
     );
+  }
+}
+
+/// The people signed up for one task, as tappable name chips (tap opens their
+/// profile). Your own chip is marked "You". Someone whose account is gone shows
+/// as "Former member" so the names still add up to the count on the capacity
+/// bar. While the directory hasn't loaded, falls back to just the count.
+class VolunteerNames extends StatelessWidget {
+  const VolunteerNames({super.key, required this.uids, required this.membersByUid, required this.myUid});
+
+  final List<String> uids;
+  final Map<String, AppUser>? membersByUid;
+  final String? myUid;
+
+  static String _initial(String name) => name.trim().isEmpty ? '?' : name.trim()[0].toUpperCase();
+
+  @override
+  Widget build(BuildContext context) {
+    final members = membersByUid;
+    if (members == null) {
+      return Text(
+        '${uids.length} signed up',
+        style: Theme.of(context).textTheme.bodySmall,
+      );
+    }
+
+    final colors = Theme.of(context).colorScheme;
+    final chips = <Widget>[];
+    // Yourself first, then everyone else alphabetically.
+    final ordered = [...uids]..sort((a, b) {
+        if (a == myUid) return -1;
+        if (b == myUid) return 1;
+        return (members[a]?.name ?? '~').toLowerCase().compareTo((members[b]?.name ?? '~').toLowerCase());
+      });
+
+    for (final uid in ordered) {
+      final member = members[uid];
+      final isMe = uid == myUid;
+      final name = member == null ? 'Former member' : (isMe ? '${member.name} (You)' : member.name);
+      chips.add(
+        ActionChip(
+          visualDensity: VisualDensity.compact,
+          avatar: CircleAvatar(
+            backgroundColor: isMe ? colors.primary : colors.primaryContainer,
+            backgroundImage: member?.photoUrl != null ? avatarImage(member!.photoUrl!, 12) : null,
+            child: member?.photoUrl == null
+                ? Text(
+                    member == null ? '?' : _initial(member.name),
+                    style: TextStyle(fontSize: 11, color: isMe ? colors.onPrimary : colors.onPrimaryContainer),
+                  )
+                : null,
+          ),
+          label: Text(name),
+          tooltip: member == null ? null : 'View ${member.name}',
+          onPressed: member == null ? null : () => context.push('/directory/$uid'),
+        ),
+      );
+    }
+    return Wrap(spacing: 6, runSpacing: 4, children: chips);
   }
 }
