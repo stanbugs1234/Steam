@@ -8,23 +8,38 @@ service firebase.storage {
         && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.status == 'approved';
     }
 
+    // Photos and news images are members-only: someone who has merely signed
+    // up (pending/denied) must not be able to fetch or list them.
+    function isApprovedMember() {
+      return request.auth != null
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.status == 'approved';
+    }
+
+    function isImage() {
+      return request.resource.contentType.matches('image/(jpeg|png|webp)');
+    }
+
     match /profile_photos/{fileName} {
-      allow read: if request.auth != null;
+      // Your own photo is always readable to you (e.g. while still pending).
+      allow read: if request.auth != null
+        && (fileName == request.auth.uid + '.jpg' || isApprovedMember());
       allow create, update: if request.auth != null
         && fileName == request.auth.uid + '.jpg'
         && request.resource.size < 5 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+        && isImage();
       // Removing your photo / deleting your account. (`write` alone can't
       // cover this: it checks request.resource, which doesn't exist on delete.)
+      // Admins may also remove a member's photo when they remove the member.
       allow delete: if request.auth != null
-        && fileName == request.auth.uid + '.jpg';
+        && (fileName == request.auth.uid + '.jpg' || isAdmin());
     }
 
     match /news_images/{fileName} {
-      allow read: if request.auth != null;
-      allow write: if isAdmin()
+      allow read: if isApprovedMember();
+      allow create, update: if isAdmin()
         && request.resource.size < 8 * 1024 * 1024
-        && request.resource.contentType.matches('image/.*');
+        && isImage();
+      allow delete: if isAdmin();
     }
   }
 }

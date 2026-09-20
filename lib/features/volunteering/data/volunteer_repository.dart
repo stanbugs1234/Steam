@@ -62,6 +62,23 @@ class VolunteerRepository {
     });
   }
 
+  /// Removes [uid] from every volunteer slot of every event, past or upcoming
+  /// (account deletion). Returns the (eventId, slotId) pairs they were removed
+  /// from so callers can cancel any reminders. Events the caller can't read
+  /// slots for are skipped rather than failing the whole cleanup.
+  Future<List<({String eventId, String slotId})>> removeUserFromAllSlots(String uid) async {
+    final removed = <({String eventId, String slotId})>[];
+    final events = await _firestore.collection('events').get();
+    for (final event in events.docs) {
+      final mine = await _slotsRef(event.id).where('signedUpUserIds', arrayContains: uid).get();
+      for (final slot in mine.docs) {
+        await cancel(event.id, slot.id, uid);
+        removed.add((eventId: event.id, slotId: slot.id));
+      }
+    }
+    return removed;
+  }
+
   Future<void> cancel(String eventId, String slotId, String uid) {
     return _slotsRef(eventId).doc(slotId).update({
       'signedUpUserIds': FieldValue.arrayRemove([uid]),

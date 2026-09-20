@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/utils/friendly_error.dart';
 import '../../../core/widgets/error_state.dart';
 import '../../../core/widgets/linkified_text.dart';
 import '../../../core/widgets/section_card.dart';
@@ -28,10 +29,25 @@ class NewsDetailScreen extends ConsumerWidget {
       confirmLabel: 'Delete',
       destructive: true,
     );
-    if (confirmed) {
+    if (!confirmed) return;
+    try {
       await ref.read(newsRepositoryProvider).deletePost(post.id);
-      if (context.mounted) context.pop();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(friendlyError(e, fallback: "Couldn't delete this post. Please try again."))),
+        );
+      }
+      return;
     }
+    if (post.imageUrl != null) {
+      try {
+        await ref.read(newsImageRepositoryProvider).deleteNewsImage(post.id);
+      } catch (_) {
+        // Best-effort: the post is gone; a stray image is only cosmetic.
+      }
+    }
+    if (context.mounted) context.pop();
   }
 
   @override

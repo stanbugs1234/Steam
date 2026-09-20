@@ -46,4 +46,28 @@ void main() {
     expect(readBack.yearlyPoints, 12);
     expect(readBack.duesPaid, isTrue);
   });
+
+  test('a malformed profile parses instead of throwing (one bad doc must not break every list)', () {
+    final user = AppUser.fromFirestore('u1', {
+      'name': 5,
+      'phone': ['x'],
+      'kids': [1, 'two', {'name': 3, 'grade': null}, {'name': 'Ok', 'grade': '2nd Grade'}],
+      'photoUrl': 42,
+      'remindersEnabled': 'yes',
+      'yearlyPoints': 'lots',
+      'clubPoints': 7.0,
+      'createdAt': 'yesterday',
+      'role': 'admin',
+      'status': 'approved',
+    });
+    expect(user.name, '');
+    expect(user.phone, '');
+    expect(user.photoUrl, isNull);
+    expect(user.remindersEnabled, isTrue);
+    expect(user.yearlyPoints, isNull);
+    expect(user.clubPoints, 7);
+    expect(user.createdAt, isNull);
+    expect(user.isAdmin, isTrue);
+    expect(user.kids.map((k) => k.name), ['', 'Ok']);
+  });
 }

@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/firebase_providers.dart';
+import '../../attendance/domain/attendance_providers.dart';
 import '../../directory/domain/directory_providers.dart';
 import '../../notifications/domain/notification_providers.dart';
 import '../../volunteering/domain/volunteer_providers.dart';
@@ -13,6 +14,7 @@ final accountDeletionServiceProvider = Provider<AccountDeletionService>((ref) {
     users: ref.watch(userRepositoryProvider),
     photos: ref.watch(profilePhotoRepositoryProvider),
     volunteer: ref.watch(volunteerRepositoryProvider),
+    attendance: ref.watch(attendanceRepositoryProvider),
     reminders: ref.watch(reminderServiceProvider),
   );
 });

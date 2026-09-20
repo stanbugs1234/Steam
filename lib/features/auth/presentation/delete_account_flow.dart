@@ -3,8 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/utils/friendly_error.dart';
 import '../../../models/app_user.dart';
-import '../../../models/club_event.dart';
-import '../../events/domain/event_providers.dart';
 import '../data/account_deletion_service.dart';
 import '../domain/account_providers.dart';
 import '../domain/auth_providers.dart';
@@ -32,10 +30,6 @@ Future<void> confirmAndDeleteAccount({
   final admins = me.isAdmin
       ? (ref.read(approvedMembersProvider).value ?? const <AppUser>[]).where((m) => m.isAdmin).length
       : 0;
-  final now = DateTime.now();
-  final upcoming = me.isApproved
-      ? (ref.read(eventsProvider).value ?? const []).where((e) => e.endTime.isAfter(now)).toList()
-      : const <ClubEvent>[];
 
   if (me.isAdmin && admins <= 1) {
     await _notice(
@@ -62,8 +56,8 @@ Future<void> confirmAndDeleteAccount({
     builder: (context) => AlertDialog(
       title: const Text('Delete your account?'),
       content: const Text(
-        'This permanently deletes your STEAM Club account: your profile, points and volunteer history, '
-        "and your spot in upcoming volunteer shifts. This can't be undone.",
+        'This permanently deletes your STEAM Club account: your profile, photo, points and check-in history, '
+        "and your spot in volunteer shifts. This can't be undone.",
       ),
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
@@ -79,7 +73,7 @@ Future<void> confirmAndDeleteAccount({
 
   onBusy(true);
   try {
-    await service.deleteMyAccount(me: me, upcomingEvents: upcoming, isOnlyAdmin: admins <= 1);
+    await service.deleteMyAccount(me: me, isOnlyAdmin: admins <= 1);
     // Success signs the member out, which moves the app to the login screen.
   } on RecentLoginRequiredException {
     if (context.mounted) {

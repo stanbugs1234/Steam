@@ -11,7 +11,6 @@ class ClubEvent {
   final String createdBy;
   final DateTime? createdAt;
   final bool checkInEnabled;
-  final List<String> checkedInUserIds;
 
   const ClubEvent({
     required this.id,
@@ -24,7 +23,6 @@ class ClubEvent {
     required this.createdBy,
     this.createdAt,
     this.checkInEnabled = false,
-    this.checkedInUserIds = const [],
   });
 
   factory ClubEvent.fromFirestore(String id, Map<String, dynamic> data) {
@@ -39,7 +37,6 @@ class ClubEvent {
       createdBy: data['createdBy'] as String? ?? '',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
       checkInEnabled: data['checkInEnabled'] as bool? ?? false,
-      checkedInUserIds: List<String>.from(data['checkedInUserIds'] as List? ?? const []),
     );
   }
 
@@ -54,7 +51,6 @@ class ClubEvent {
       'createdBy': createdBy,
       'createdAt': createdAt == null ? FieldValue.serverTimestamp() : Timestamp.fromDate(createdAt!),
       'checkInEnabled': checkInEnabled,
-      'checkedInUserIds': checkedInUserIds,
     };
   }
 }

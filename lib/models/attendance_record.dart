@@ -21,15 +21,20 @@ class AttendanceRecord {
   factory AttendanceRecord.fromFirestore(String eventId, Map<String, dynamic> data) {
     return AttendanceRecord(
       eventId: eventId,
-      eventTitle: data['eventTitle'] as String? ?? '',
-      eventStartTime: (data['eventStartTime'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      points: data['points'] as int? ?? 0,
-      checkedInAt: (data['checkedInAt'] as Timestamp?)?.toDate(),
+      eventTitle: data['eventTitle'] is String ? data['eventTitle'] as String : '',
+      eventStartTime: data['eventStartTime'] is Timestamp
+          ? (data['eventStartTime'] as Timestamp).toDate()
+          : DateTime.now(),
+      points: data['points'] is num ? (data['points'] as num).toInt() : 0,
+      checkedInAt: data['checkedInAt'] is Timestamp ? (data['checkedInAt'] as Timestamp).toDate() : null,
     );
   }
 
   Map<String, dynamic> toFirestore() {
     return {
+      // Stored redundantly (it's also the doc id) so an admin can count an
+      // event's check-ins with one collection-group query.
+      'eventId': eventId,
       'eventTitle': eventTitle,
       'eventStartTime': Timestamp.fromDate(eventStartTime),
       'points': points,

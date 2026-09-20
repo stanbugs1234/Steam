@@ -17,9 +17,11 @@ class VolunteerSlot {
   factory VolunteerSlot.fromFirestore(String id, Map<String, dynamic> data) {
     return VolunteerSlot(
       id: id,
-      label: data['label'] as String? ?? '',
-      capacity: data['capacity'] as int? ?? 0,
-      signedUpUserIds: List<String>.from(data['signedUpUserIds'] as List? ?? const []),
+      label: data['label'] is String ? data['label'] as String : '',
+      capacity: data['capacity'] is num ? (data['capacity'] as num).toInt() : 0,
+      signedUpUserIds: data['signedUpUserIds'] is List
+          ? (data['signedUpUserIds'] as List).whereType<String>().toList()
+          : const [],
     );
   }
 

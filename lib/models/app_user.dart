@@ -47,36 +47,46 @@ class AppUser {
   bool get isAdmin => role == UserRole.admin;
   int get kidCount => kids.length;
 
+  /// Tolerant of wrongly-typed or missing fields: a member controls parts of
+  /// their own document, and one malformed value must not make the directory,
+  /// leaderboard or approval queue throw for everybody.
   factory AppUser.fromFirestore(String uid, Map<String, dynamic> data) {
     return AppUser(
       uid: uid,
-      name: data['name'] as String? ?? '',
-      email: data['email'] as String? ?? '',
-      phone: data['phone'] as String? ?? '',
+      name: _string(data['name']) ?? '',
+      email: _string(data['email']) ?? '',
+      phone: _string(data['phone']) ?? '',
       kids: _kidsFromFirestore(data),
-      photoUrl: data['photoUrl'] as String?,
-      role: (data['role'] as String?) == 'admin' ? UserRole.admin : UserRole.member,
-      status: _statusFromString(data['status'] as String?),
-      createdAt: (data['createdAt'] as Timestamp?)?.toDate(),
-      mergedFromId: data['mergedFromId'] as String?,
-      remindersEnabled: data['remindersEnabled'] as bool? ?? true,
-      duesPaid: data['duesPaid'] as bool? ?? false,
-      isNewMember: data['isNewMember'] as bool? ?? false,
-      memberNumber: data['memberNumber'] as String?,
-      clubPoints: data['clubPoints'] as int?,
-      yearlyPoints: data['yearlyPoints'] as int?,
+      photoUrl: _string(data['photoUrl']),
+      role: (data['role'] as Object?) == 'admin' ? UserRole.admin : UserRole.member,
+      status: _statusFromString(_string(data['status'])),
+      createdAt: data['createdAt'] is Timestamp ? (data['createdAt'] as Timestamp).toDate() : null,
+      mergedFromId: _string(data['mergedFromId']),
+      remindersEnabled: data['remindersEnabled'] is bool ? data['remindersEnabled'] as bool : true,
+      duesPaid: data['duesPaid'] is bool ? data['duesPaid'] as bool : false,
+      isNewMember: data['isNewMember'] is bool ? data['isNewMember'] as bool : false,
+      memberNumber: data['memberNumber']?.toString(),
+      clubPoints: _int(data['clubPoints']),
+      yearlyPoints: _int(data['yearlyPoints']),
     );
   }
+
+  static String? _string(Object? v) => v is String ? v : null;
+
+  static int? _int(Object? v) => v is num ? v.toInt() : null;
 
   static List<ChildInfo> _kidsFromFirestore(Map<String, dynamic> data) {
     final kidsRaw = data['kids'];
     if (kidsRaw is List) {
-      return kidsRaw.map((e) => ChildInfo.fromMap(Map<String, dynamic>.from(e as Map))).toList();
+      return kidsRaw
+          .whereType<Map>()
+          .map((e) => ChildInfo.fromMap(Map<String, dynamic>.from(e)))
+          .toList();
     }
     // Legacy docs stored a single child as separate kidName/kidGrade fields.
-    final legacyName = data['kidName'] as String? ?? '';
+    final legacyName = _string(data['kidName']) ?? '';
     if (legacyName.isEmpty) return const [];
-    return [ChildInfo(name: legacyName, grade: data['kidGrade'] as String? ?? '')];
+    return [ChildInfo(name: legacyName, grade: _string(data['kidGrade']) ?? '')];
   }
 
   static UserStatus _statusFromString(String? value) {

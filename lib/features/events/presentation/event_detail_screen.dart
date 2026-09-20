@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/utils/friendly_error.dart';
 import '../../../core/widgets/error_state.dart';
 import '../../../core/widgets/section_card.dart';
 import '../../../models/club_event.dart';
@@ -15,10 +16,10 @@ import '../../volunteering/presentation/volunteer_slot_section.dart';
 import '../domain/event_providers.dart';
 import '../../../core/widgets/confirm_dialog.dart';
 
-/// Whether check-in can be started/shown right now — anyone can start
-/// check-in for an event, but only within a window around its own time, so
-/// this can't be used on a random past or far-future event. Mirrors the
-/// Firestore rule (`isStartingCheckIn`) that actually enforces this.
+/// Whether check-in can be started/shown right now: only within a window
+/// around the event's own time, so it isn't used on a random past or
+/// far-future event. Mirrors the window the Firestore rules enforce when a
+/// member checks in.
 bool _canUseCheckIn(ClubEvent event) {
   final now = DateTime.now();
   return now.isAfter(event.startTime.subtract(const Duration(minutes: 30))) &&
@@ -37,7 +38,7 @@ class EventDetailScreen extends ConsumerWidget {
       } catch (e) {
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not start check-in: $e')),
+            SnackBar(content: Text(friendlyError(e, fallback: 'Could not start check-in.'))),
           );
         }
         return;
@@ -67,7 +68,7 @@ class EventDetailScreen extends ConsumerWidget {
                     tooltip: 'Share',
                     onPressed: () => showShareSheet(context, ShareContent.fromEvent(event)),
                   ),
-                  if (_canUseCheckIn(event))
+                  if (isAdmin && _canUseCheckIn(event))
                     IconButton(
                       icon: const Icon(Icons.qr_code_2),
                       tooltip: 'Check-in QR',
@@ -159,7 +160,7 @@ class EventDetailScreen extends ConsumerWidget {
                 const SizedBox(height: 16),
                 VolunteerSlotSection(event: event),
               ],
-              if (event.checkInEnabled) ...[
+              if (isAdmin && event.checkInEnabled) ...[
                 const SizedBox(height: 16),
                 SectionCard(
                   title: 'Attendance',
@@ -168,7 +169,11 @@ class EventDetailScreen extends ConsumerWidget {
                   children: [
                     _InfoRow(
                       icon: Icons.how_to_reg_outlined,
-                      text: '${event.checkedInUserIds.length} checked in',
+                      text: ref.watch(checkInCountProvider(event.id)).when(
+                            data: (n) => '$n checked in',
+                            loading: () => 'Counting check-ins…',
+                            error: (_, _) => "Couldn't count check-ins",
+                          ),
                     ),
                   ],
                 ),

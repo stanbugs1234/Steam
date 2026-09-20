@@ -31,18 +31,18 @@ service cloud.firestore {
         || (isApprovedMember() && resource.data.status == 'approved')
         // A phone-verified signup may look up a bulk-imported roster
         // placeholder matching their own verified phone, to merge into it
-        // instead of creating a disconnected duplicate account.
+        // instead of creating a disconnected duplicate account. (There is
+        // deliberately no email equivalent: Firebase issues an email claim for
+        // accounts whose email was never verified, so it can't prove who
+        // someone is. Email signups are approved by an admin instead.)
+        // No `uid.matches('imported_.*')` here on purpose: a query can only be
+        // authorised by what it filters on (phone ==), and Firestore can't
+        // prove a document-id pattern for a list — with it, the signup lookup
+        // was always denied and the merge never happened. Matching the
+        // caller's own verified phone is what scopes this.
         || (
-          uid.matches('imported_.*')
-          && request.auth.token.phone_number != null
+          request.auth.token.phone_number != null
           && request.auth.token.phone_number == resource.data.phone
-        )
-        // Same idea for an email/password signup matching a placeholder's
-        // email.
-        || (
-          uid.matches('imported_.*')
-          && request.auth.token.email != null
-          && request.auth.token.email == resource.data.email
         )
       );
 
@@ -54,6 +54,23 @@ service cloud.firestore {
           'mergedFromId', 'remindersEnabled', 'duesPaid', 'isNewMember', 'memberNumber',
           'clubPoints', 'yearlyPoints'
         ]);
+      }
+
+      // Free-text profile fields a member controls must be the right type and a
+      // sane size — one member writing `name: 5` or a huge `kids` list would
+      // otherwise break the directory for everybody. A photo can only point at
+      // this project's own Storage bucket (no third-party tracking images).
+      function hasValidProfileFields() {
+        let d = request.resource.data;
+        return d.get('name', '') is string && d.get('name', '').size() <= 100
+          && d.get('phone', '') is string && d.get('phone', '').size() <= 30
+          && d.get('email', '') is string && d.get('email', '').size() <= 200
+          && d.get('kids', []) is list && d.get('kids', []).size() <= 12
+          && d.get('remindersEnabled', true) is bool
+          && (d.get('photoUrl', null) == null
+            || (d.photoUrl is string
+              && d.photoUrl.size() <= 600
+              && d.photoUrl.matches('https://firebasestorage[.]googleapis[.]com/v0/b/steam-club-app[.].*')));
       }
 
       // The unclaimed roster placeholder a merging signup says it is claiming.
@@ -110,17 +127,8 @@ service cloud.firestore {
             && claimedPlaceholder().status == 'approved'
             && claimsOnlyRosterValues()
           )
-          || (
-            request.auth.token.email != null
-            && request.resource.data.role == 'member'
-            && request.resource.data.status == 'approved'
-            && request.resource.data.mergedFromId is string
-            && request.resource.data.mergedFromId.matches('imported_.*')
-            && claimedPlaceholder().email == request.auth.token.email
-            && claimedPlaceholder().status == 'approved'
-            && claimsOnlyRosterValues()
-          )
-        );
+        )
+        && hasValidProfileFields();
 
       // Members may edit only their own profile fields — never role/status
       // or anything the club maintains (points, dues, member number, join
@@ -131,25 +139,20 @@ service cloud.firestore {
           && request.resource.data.role == resource.data.role
           && request.resource.data.status == resource.data.status
           && request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['name', 'phone', 'kids', 'photoUrl', 'remindersEnabled']))
+            .hasOnly(['name', 'phone', 'kids', 'photoUrl', 'remindersEnabled'])
+          && hasValidProfileFields())
         || isAdmin()
       );
 
       // Admins can delete anyone, and a member can delete their own account
-      // (in-app account deletion). A phone- or email-verified user may also
-      // delete the specific import placeholder they just claimed by
-      // matching phone/email, cleaning up the duplicate once merged into
-      // their real account.
+      // (in-app account deletion). A phone-verified user may also delete the
+      // specific import placeholder they just claimed by matching phone,
+      // cleaning up the duplicate once merged into their real account.
       allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == uid) || (
         uid.matches('imported_.*')
         && isSignedIn()
         && request.auth.token.phone_number != null
         && request.auth.token.phone_number == resource.data.phone
-      ) || (
-        uid.matches('imported_.*')
-        && isSignedIn()
-        && request.auth.token.email != null
-        && request.auth.token.email == resource.data.email
       );
 
       // A member's own check-in history. Doc id is the eventId, so a repeat
@@ -158,13 +161,18 @@ service cloud.firestore {
       match /attendance/{eventId} {
         allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
         // The record must say exactly what the event says, be worth exactly one
-        // point, and be written while check-in is actually open — otherwise a
-        // member could write themselves any number of points directly.
+        // point, be written while check-in is open, and carry the event's
+        // secret code — which only admins can read from Firestore and which
+        // is shown only in the QR an admin opens at the meeting. Without it a
+        // member couldn't write themselves points from home.
         function isValidCheckIn() {
           let ev = get(/databases/$(database)/documents/events/$(eventId)).data;
+          let secret = get(/databases/$(database)/documents/events/$(eventId)/private/checkin).data;
           let d = request.resource.data;
           return ev.checkInEnabled == true
-            && d.keys().hasOnly(['eventTitle', 'eventStartTime', 'points', 'checkedInAt'])
+            && d.keys().hasOnly(['eventId', 'eventTitle', 'eventStartTime', 'points', 'checkedInAt', 'code'])
+            && d.eventId == eventId
+            && d.code == secret.code
             && d.points == 1
             && d.eventTitle == ev.title
             && d.eventStartTime == ev.startTime
@@ -173,9 +181,17 @@ service cloud.firestore {
             && request.time < ev.endTime + duration.value(2, 'h');
         }
 
-        allow create: if isSignedIn() && request.auth.uid == uid && isValidCheckIn();
-        allow update, delete: if isAdmin();
+        allow create: if isApprovedMember() && request.auth.uid == uid && isValidCheckIn();
+        allow update: if isAdmin();
+        // Members may remove their own record (account deletion). That gains
+        // nothing: it removes their point, and re-creating needs the secret.
+        allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
       }
+    }
+
+    // Lets an admin count check-ins for an event across all members.
+    match /{path=**}/attendance/{eventId} {
+      allow read: if isAdmin();
     }
 
     match /news/{postId} {
@@ -184,50 +200,20 @@ service cloud.firestore {
     }
 
     match /events/{eventId} {
-      // Members may only add exactly their own uid to checkedInUserIds, and
-      // only when the event has check-in enabled; every other field on the
-      // event doc must stay unchanged. Admins can update anything.
-      function isSelfCheckInChange() {
-        return resource.data.checkInEnabled == true
-          && request.resource.data.title == resource.data.title
-          && request.resource.data.description == resource.data.description
-          && request.resource.data.location == resource.data.location
-          && request.resource.data.startTime == resource.data.startTime
-          && request.resource.data.endTime == resource.data.endTime
-          && request.resource.data.needsVolunteers == resource.data.needsVolunteers
-          && request.resource.data.checkInEnabled == resource.data.checkInEnabled
-          && request.resource.data.checkedInUserIds.size() == resource.data.checkedInUserIds.size() + 1
-          && request.resource.data.checkedInUserIds.hasAll(resource.data.checkedInUserIds)
-          && request.resource.data.checkedInUserIds.hasAll([request.auth.uid])
-          && !resource.data.checkedInUserIds.hasAll([request.auth.uid]);
-      }
-
-      // Any approved member may turn check-in on for an event themselves —
-      // e.g. whoever's running that meeting, not just an app admin — but
-      // only within a window around the event's own time, so it can't be
-      // flipped on for an unrelated past/future event.
-      function isStartingCheckIn() {
-        return resource.data.checkInEnabled == false
-          && request.resource.data.checkInEnabled == true
-          && request.resource.data.title == resource.data.title
-          && request.resource.data.description == resource.data.description
-          && request.resource.data.location == resource.data.location
-          && request.resource.data.startTime == resource.data.startTime
-          && request.resource.data.endTime == resource.data.endTime
-          && request.resource.data.needsVolunteers == resource.data.needsVolunteers
-          && request.resource.data.checkedInUserIds == resource.data.checkedInUserIds
-          && request.time > resource.data.startTime - duration.value(30, 'm')
-          && request.time < resource.data.endTime + duration.value(2, 'h');
-      }
-
       allow read: if isApprovedMember() || isAdmin();
-      allow create, delete: if isAdmin();
-      allow update: if isAdmin()
-        || (isApprovedMember() && (isSelfCheckInChange() || isStartingCheckIn()));
+      allow create, update, delete: if isAdmin();
+
+      // The per-event check-in secret. Admins only — that's what proves a
+      // member was actually shown the QR code rather than reading it off
+      // Firestore.
+      match /private/{doc} {
+        allow read, write: if isAdmin();
+      }
 
       // Members may only toggle their own membership in signedUpUserIds
       // (add or remove exactly their own uid, nothing else); admins manage
-      // the slots themselves (label/capacity/create/delete).
+      // the slots themselves (label/capacity/create/delete). Signing up is
+      // only possible until the event ends; leaving is always allowed.
       match /volunteerSlots/{slotId} {
         function isSelfSignupChange() {
           let before = resource.data.signedUpUserIds;
@@ -239,7 +225,8 @@ service cloud.firestore {
                 && after.hasAll(before)
                 && after.hasAll([request.auth.uid])
                 && !before.hasAll([request.auth.uid])
-                && after.size() <= resource.data.capacity)
+                && after.size() <= resource.data.capacity
+                && request.time < get(/databases/$(database)/documents/events/$(eventId)).data.endTime)
               || (before.size() == after.size() + 1
                 && before.hasAll(after)
                 && before.hasAll([request.auth.uid])

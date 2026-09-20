@@ -5,7 +5,7 @@ For the club's admins. Anything technical is at the bottom.
 ## Approving new members
 - **Home** shows every pending request for admins. Tap the check mark to approve or the X to deny.
 - If the request matches someone already on the roster you'll see a red banner with **Merge & Approve** — use it, not plain Approve, so their roster points/dues/member # come along and no duplicate is created.
-- Preloaded roster members who sign up with the phone or email on file are approved automatically.
+- Preloaded roster members who sign up with the **phone** on file are approved automatically. Anyone who signs up by **email** always waits for you — check for the red **Merge & Approve** banner.
 
 ## Fixing a member's info
 Directory → tap the member → **Admin Tools**:
@@ -14,7 +14,7 @@ Directory → tap the member → **Admin Tools**:
 - A member can edit only their own name, phone, photo, children and reminders. Everything else is admin-only.
 
 ## Meetings and points
-- Anyone can open the event and tap the QR icon to start check-in (available from 30 minutes before to 2 hours after the event). Members scan it from **Home → Check In** for +1 point.
+- Only **admins** run check-in: open the event and tap the QR icon (available from 30 minutes before to 2 hours after the event). The code is secret to that event and can't be read by members, so points can't be claimed without scanning it. Members scan it from **Home → Check In** for +1 point; the event page shows how many have checked in. A QR from an older app version no longer works — open the event and show the new one.
 - To correct a mistake, adjust **Roster points** on the member.
 
 ## Volunteering

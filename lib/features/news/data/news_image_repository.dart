@@ -18,4 +18,13 @@ class NewsImageRepository {
     }
     return ref.getDownloadURL();
   }
+
+  /// Removes a post's image. An image that's already gone is not an error.
+  Future<void> deleteNewsImage(String postId) async {
+    try {
+      await _storage.ref('news_images/$postId.jpg').delete();
+    } on FirebaseException catch (e) {
+      if (e.code != 'object-not-found') rethrow;
+    }
+  }
 }

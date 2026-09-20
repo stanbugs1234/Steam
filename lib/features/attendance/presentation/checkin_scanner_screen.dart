@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart' show FirebaseException;
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -11,7 +12,7 @@ import '../../auth/domain/auth_providers.dart';
 import '../../events/domain/event_providers.dart';
 import '../data/attendance_repository.dart';
 import '../domain/attendance_providers.dart';
-import 'checkin_qr_screen.dart';
+import '../domain/checkin_code.dart';
 import '../../../core/utils/friendly_error.dart';
 
 class CheckInScannerScreen extends ConsumerStatefulWidget {
@@ -35,14 +36,17 @@ class _CheckInScannerScreenState extends ConsumerState<CheckInScannerScreen> {
   Future<void> _handleDetect(BarcodeCapture capture) async {
     if (_busy) return;
     final raw = capture.barcodes.firstOrNull?.rawValue;
-    if (raw == null || !raw.startsWith(checkInQrPrefix)) {
-      setState(() => _message = "That's not a STEAM Club check-in code.");
+    if (raw == null) return;
+    final code = CheckInCode.tryParse(raw);
+    if (code == null) {
+      setState(() => _message = CheckInCode.isLegacy(raw)
+          ? 'That code is out of date. Ask for the meeting\'s new check-in code.'
+          : "That's not a STEAM Club check-in code.");
       return;
     }
 
-    final eventId = raw.substring(checkInQrPrefix.length);
     final events = ref.read(eventsProvider).value ?? const <ClubEvent>[];
-    final event = events.firstWhereOrNull((e) => e.id == eventId);
+    final event = events.firstWhereOrNull((e) => e.id == code.eventId);
     if (event == null || !event.checkInEnabled) {
       setState(() => _message = "This code isn't set up for check-in.");
       return;
@@ -77,7 +81,7 @@ class _CheckInScannerScreenState extends ConsumerState<CheckInScannerScreen> {
     }
 
     try {
-      await ref.read(attendanceRepositoryProvider).checkIn(uid: uid, event: event);
+      await ref.read(attendanceRepositoryProvider).checkIn(uid: uid, event: event, code: code.secret);
       HapticFeedback.mediumImpact();
       if (mounted) {
         Navigator.of(context).pop();
@@ -87,6 +91,15 @@ class _CheckInScannerScreenState extends ConsumerState<CheckInScannerScreen> {
       if (mounted) setState(() => _message = "You're already checked in to this event.");
     } on CheckInNotAvailableException {
       if (mounted) setState(() => _message = "This code isn't set up for check-in.");
+    } on FirebaseException catch (e) {
+      // The rules only refuse a check-in for a wrong/out-of-date code, a closed
+      // window, or a member who isn't approved — say so rather than "no
+      // permission".
+      if (mounted) {
+        setState(() => _message = e.code == 'permission-denied'
+            ? "That code didn't work. Check-in may have closed, or the code is out of date."
+            : friendlyError(e));
+      }
     } catch (e) {
       if (mounted) setState(() => _message = friendlyError(e));
     } finally {

@@ -9,6 +9,16 @@ final attendanceRepositoryProvider = Provider<AttendanceRepository>((ref) {
   return AttendanceRepository(ref.watch(firestoreProvider));
 });
 
+/// An event's check-in code — admin only (members can't read it).
+final checkInCodeProvider = FutureProvider.autoDispose.family<String, String>((ref, eventId) {
+  return ref.watch(attendanceRepositoryProvider).getOrCreateCode(eventId);
+});
+
+/// How many members have checked in to an event — admin only.
+final checkInCountProvider = FutureProvider.autoDispose.family<int, String>((ref, eventId) {
+  return ref.watch(attendanceRepositoryProvider).checkInCount(eventId);
+});
+
 /// The signed-in member's check-in history, newest first.
 final myCheckInsProvider = StreamProvider<List<AttendanceRecord>>((ref) {
   final myUid = ref.watch(currentAppUserProvider).value?.uid;

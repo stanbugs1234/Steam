@@ -13,11 +13,12 @@ Work top to bottom. ✅ = already done in the code; ☐ = something only you can
 - ✅ Roster values (member #, points, dues, new-member badge) now carry over when a preloaded member signs up.
 - ☐ Run the roster check (read-only): `cd tools/roster-check && npm install && npm run check`. Fix what it lists in the Firebase console — lowercase emails, `+1XXXXXXXXXX` phones, no duplicates.
 - ☐ Any member who signed up **before** this fix may have lost roster values (the check lists them). Re-enter them from the roster sheet: Directory → member → Admin Tools → Member #, Roster points, Club points, Dues paid.
-- ☐ Run the rules tests, then deploy rules (they are **not deployed yet**):
+- ☐ Run the rules tests, then deploy rules (they are **not deployed yet** — the live Firestore/Storage rules are older than this repo's):
   ```
   cd tools/rules-tests && npm install && npm test        # expect: ALL PASSED
-  cd ../.. && firebase deploy --only firestore:rules,storage
+  cd ../.. && firebase deploy --only firestore:rules,storage,firestore:indexes
   ```
+  **Order matters:** the new rules require the new app build (check-in needs a secret code in the QR; email sign-ups are pending). Ship the app build to testers **first**, then deploy the rules. Older builds' check-in will be refused after the deploy.
 - ☐ Publish the legal pages: `firebase deploy --only hosting` → https://steam-club-app.web.app/privacy.html (also `terms.html`, `support.html`). Open all three on your phone.
 
 ## 2. Firebase console (project `steam-club-app`)
@@ -44,7 +45,7 @@ Work top to bottom. ✅ = already done in the code; ☐ = something only you can
 - ☐ In App Store Connect create the app record (bundle ID `com.stedwardsteamclub.app`), then TestFlight:
   1. **Internal** (you + 3–5 members): include one **preloaded roster member** and one **brand-new signup**.
   2. **External** (25–50 members, about a week): collect crashes in Crashlytics.
-- Test list on a real phone: sign up with a roster phone/email → lands in the app already approved with points/dues/member # intact; a brand-new signup → "You're almost in", admin approves from Home; check-in QR scan gives exactly 1 point; volunteer sign-up + reminder; edit profile + photo; share a news post to Messages; delete a **throwaway** account; large text size and dark mode; airplane mode shows a friendly message with **Try again**.
+- Test list on a real phone: sign up with a roster **phone** → lands in the app already approved (an **email** sign-up waits for an admin, who merges it) with points/dues/member # intact; a brand-new signup → "You're almost in", admin approves from Home; admin opens the event's check-in QR and a member's scan gives exactly 1 point (a second scan is refused; a pending user can't check in); volunteer sign-up + reminder; edit profile + photo; share a news post to Messages; delete a **throwaway** account; large text size and dark mode; airplane mode shows a friendly message with **Try again**.
 
 ## 4. App Store Connect listing
 

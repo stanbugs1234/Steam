@@ -8,9 +8,10 @@ Firebase (Auth, Firestore, Storage, Crashlytics). iOS first, Android next.
 
 - **Sign-in:** phone (SMS code) or email/password. New members are *pending*
   until an admin approves them. Members preloaded from the roster are stored as
-  `users/imported_*` placeholders; when someone signs up with a matching phone
-  or email they are merged into it (points, dues, member #, join date carry
-  over) and approved automatically.
+  `users/imported_*` placeholders; when someone signs up with a matching
+  **phone** (SMS-verified) they are merged into it (points, dues, member #,
+  join date carry over) and approved automatically. Email sign-ups always wait
+  for an admin (Firebase doesn't verify emails), who merges them from Home.
 - **Roles:** `member` and `admin`. Admins approve members, post news/events,
   manage volunteer slots, and maintain roster fields (member #, points, dues).
 - **Data:** Firestore (`users`, `events` + `volunteerSlots`, `news`,

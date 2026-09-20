@@ -107,47 +107,21 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       );
       final uid = credential.user!.uid;
 
-      AppUser? placeholder;
-      try {
-        placeholder = await userRepo.findApprovedPlaceholderByEmail(email);
-      } catch (_) {
-        // If the lookup fails for any reason, fall through to a normal
-        // pending signup rather than blocking account creation.
-        placeholder = null;
-      }
-
-      final phone = _phoneCtrl.text.trim();
+      // Email signups are always approved by an admin. Firebase attaches an
+      // email to accounts whose address was never verified, so it can't be
+      // trusted to claim a roster member's record automatically — the admin
+      // sees any matching roster entry and merges it (a phone number, which
+      // is SMS-verified, is what auto-merges).
       await userRepo.createProfile(AppUser(
         uid: uid,
         name: _nameCtrl.text.trim(),
         email: email,
-        phone: phone.isNotEmpty ? phone : (placeholder?.phone ?? ''),
-        kids: _kids.isNotEmpty ? _kids : (placeholder?.kids ?? const []),
+        phone: _phoneCtrl.text.trim(),
+        kids: _kids,
         role: UserRole.member,
-        status: placeholder != null ? UserStatus.approved : UserStatus.pending,
-        mergedFromId: placeholder?.uid,
-        // Preserve the placeholder's original join date on merge — otherwise
-        // toFirestore() would stamp today's date and lose their real tenure.
-        createdAt: placeholder?.createdAt,
-        // ...and the roster's own records, which would otherwise vanish along
-        // with the placeholder we delete right after.
-        memberNumber: placeholder?.memberNumber,
-        clubPoints: placeholder?.clubPoints,
-        yearlyPoints: placeholder?.yearlyPoints,
-        duesPaid: placeholder?.duesPaid ?? false,
-        isNewMember: placeholder?.isNewMember ?? false,
+        status: UserStatus.pending,
       ));
-
-      if (placeholder != null) {
-        try {
-          await userRepo.deletePlaceholder(placeholder.uid);
-        } catch (_) {
-          // Non-fatal: the real account was already created successfully;
-          // a leftover placeholder just needs manual cleanup by an admin.
-        }
-      }
-      // Router redirect will move to /pending-approval (or straight to
-      // /home if merged as approved) automatically.
+      // Router redirect will move to /pending-approval automatically.
     } on FirebaseAuthException catch (e) {
       setState(() => _errorText = friendlyError(e, fallback: 'Could not create your account. Please try again.'));
     } catch (e) {

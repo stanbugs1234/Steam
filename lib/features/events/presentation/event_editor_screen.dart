@@ -151,11 +151,6 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
           'endTime': Timestamp.fromDate(_end),
           'needsVolunteers': _needsVolunteers,
           'checkInEnabled': _checkInEnabled,
-          // Events created before this feature existed have no
-          // checkedInUserIds field at all; arrayUnion with an empty list
-          // initializes it to [] without disturbing any existing entries,
-          // which the check-in security rule depends on being present.
-          'checkedInUserIds': FieldValue.arrayUnion(const []),
         });
         if (writeSingleSlot) {
           if (_existingSlots.isEmpty) {
