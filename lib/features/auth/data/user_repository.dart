@@ -13,6 +13,17 @@ class UserRepository {
     return _usersRef.doc(user.uid).set(user.toFirestore());
   }
 
+  /// Creates a phone-verified member's profile that claims an unclaimed
+  /// roster placeholder, and deletes that placeholder, as one atomic write —
+  /// so a failure can't leave the member approved *and* their roster entry
+  /// still sitting in the directory as a duplicate.
+  Future<void> createProfileClaiming(AppUser user, String placeholderId) {
+    final batch = _firestore.batch();
+    batch.set(_usersRef.doc(user.uid), user.toFirestore());
+    batch.delete(_usersRef.doc(placeholderId));
+    return batch.commit();
+  }
+
   Stream<AppUser?> watchUser(String uid) {
     return _usersRef.doc(uid).snapshots().map((doc) {
       if (!doc.exists) return null;
@@ -52,30 +63,23 @@ class UserRepository {
   /// rules only allow this for the signed-in member's own doc, or an admin.
   Future<void> deleteAccountDoc(String uid) => _usersRef.doc(uid).delete();
 
-  /// Scans approved-status docs (real members and unclaimed `imported_*`
+  /// Looks through [approved] members (real members and unclaimed `imported_*`
   /// roster placeholders alike) for one that shares a phone or email with
   /// [pendingUser], other than themselves. Phone numbers are compared by
   /// their last 10 digits so formatting differences (e.g. a roster import
   /// stored as "(555) 123-4567" vs. a signup's "+15551234567") still match.
-  /// Only admins can call this — the security rules only let an admin read
-  /// arbitrary users' docs, which this needs to check everyone, not just the
-  /// pending user's own record.
-  Future<AppUser?> findPossibleDuplicate(AppUser pendingUser) async {
+  /// Takes the already-loaded member list so a queue of N pending requests
+  /// doesn't cost N full-directory reads.
+  static AppUser? findPossibleDuplicate(AppUser pendingUser, Iterable<AppUser> approved) {
     final normalizedPhone = _lastTenDigits(pendingUser.phone);
     final normalizedEmail = pendingUser.email.trim().toLowerCase();
     if (normalizedPhone.isEmpty && normalizedEmail.isEmpty) return null;
 
-    final snap = await _usersRef.where('status', isEqualTo: UserStatus.approved.name).get();
-    for (final doc in snap.docs) {
-      if (doc.id == pendingUser.uid) continue;
-      final data = doc.data();
-      final candidatePhone = _lastTenDigits(data['phone'] as String? ?? '');
-      final candidateEmail = ((data['email'] as String?) ?? '').trim().toLowerCase();
-      final phoneMatches = normalizedPhone.isNotEmpty && normalizedPhone == candidatePhone;
-      final emailMatches = normalizedEmail.isNotEmpty && normalizedEmail == candidateEmail;
-      if (phoneMatches || emailMatches) {
-        return AppUser.fromFirestore(doc.id, data);
-      }
+    for (final candidate in approved) {
+      if (candidate.uid == pendingUser.uid) continue;
+      final phoneMatches = normalizedPhone.isNotEmpty && normalizedPhone == _lastTenDigits(candidate.phone);
+      final emailMatches = normalizedEmail.isNotEmpty && normalizedEmail == candidate.email.trim().toLowerCase();
+      if (phoneMatches || emailMatches) return candidate;
     }
     return null;
   }
@@ -123,8 +127,13 @@ class UserRepository {
       fields['createdAt'] = Timestamp.fromDate(placeholder.createdAt!);
     }
 
-    await updateProfile(pendingUser.uid, fields);
-    await deletePlaceholder(placeholder.uid);
+    // One atomic write: a failure between the two would leave the member
+    // approved *and* a duplicate placeholder still in the directory (or, worse,
+    // the placeholder gone with nothing carried over).
+    final batch = _firestore.batch();
+    batch.update(_usersRef.doc(pendingUser.uid), fields);
+    batch.delete(_usersRef.doc(placeholder.uid));
+    await batch.commit();
   }
 
   Stream<List<AppUser>> watchApprovedMembers() {

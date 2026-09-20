@@ -18,6 +18,7 @@ class MyPointsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final points = ref.watch(myPointsSummaryProvider);
+    final checkInsAsync = ref.watch(myCheckInsProvider);
     final volunteerAsync = ref.watch(myVolunteerRecordProvider);
     final dateFormat = DateFormat.yMMMEd();
     final hasAnyPoints = points.checkIns.isNotEmpty || points.rosterPoints > 0;
@@ -42,7 +43,15 @@ class MyPointsScreen extends ConsumerWidget {
             icon: Icons.emoji_events_outlined,
             padding: EdgeInsets.symmetric(horizontal: 20),
             children: [
-              if (!hasAnyPoints)
+              // Only say "No points yet" once the check-ins have really loaded.
+              if (checkInsAsync.isLoading && !checkInsAsync.hasValue)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: CircularProgressIndicator()),
+                )
+              else if (checkInsAsync.hasError && !checkInsAsync.hasValue)
+                const _EmptyRow("Couldn't load your check-ins.\nPlease try again in a moment.")
+              else if (!hasAnyPoints)
                 const _EmptyRow(
                   "No points yet.\nScan the check-in code at your next meeting to earn 1 point.",
                 ),

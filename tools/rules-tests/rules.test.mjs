@@ -1,6 +1,6 @@
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
 import {
-  doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, limit, collection, collectionGroup,
+  doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, query, where, limit, collection, collectionGroup, writeBatch,
   Timestamp, serverTimestamp,
 } from 'firebase/firestore';
 import { ref, uploadBytes, deleteObject, getBytes, listAll } from 'firebase/storage';
@@ -128,6 +128,14 @@ const phoneLookup = (uid, phone) => getDocs(query(
 await check('phone signup can query its placeholder by verified phone', assertSucceeds(phoneLookup('q1', '+15045550002')));
 await check('phone signup can read the placeholder doc directly', assertSucceeds(getDoc(doc(signup('q2', { phone_number: '+15045550002' }), 'users/imported_6_Sam'))));
 await check('phone signup cannot read someone elses placeholder', assertFails(getDoc(doc(signup('q3', { phone_number: '+15045550002' }), 'users/imported_7_Kim'))));
+await check('phone merge + placeholder delete as one atomic batch', (async () => {
+  const db = signup('m9', { phone_number: '+15045550003' });
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'users/m9'), plain({ status: 'approved', mergedFromId: 'imported_7_Kim', createdAt: joined, ...ROSTER }));
+  batch.delete(doc(db, 'users/imported_7_Kim'));
+  await assertSucceeds(batch.commit());
+})());
+
 
 // Who can read which profiles.
 await check('approved member reads another approved member', assertSucceeds(getDoc(doc(mdb, 'users/member2'))));
@@ -181,6 +189,23 @@ await check('member cannot sign up after the event has ended', assertFails(updat
 await check('member can still leave a slot on an ended event', assertSucceeds(updateDoc(slot(mdb, 'ended', 's2'), { signedUpUserIds: [] })));
 await check('member cannot sign someone else up', assertFails(updateDoc(slot(m2db, 'open', 's1'), { signedUpUserIds: ['member1', 'member1x'] })));
 await check('pending user cannot sign up', assertFails(updateDoc(slot(pdb, 'open', 's1'), { signedUpUserIds: ['member1', 'pending1'] })));
+
+// ---- events: atomic create / delete (what the admin screens do) -----------
+await check('admin creates an event and its slot in one batch', (async () => {
+  const batch = writeBatch(adb);
+  batch.set(doc(adb, 'events/new1'), { title: 'New', description: '', location: '', startTime: minutes(60), endTime: minutes(120), needsVolunteers: true, checkInEnabled: false, createdBy: 'admin1', createdAt: serverTimestamp() });
+  batch.set(doc(adb, 'events/new1/volunteerSlots/s1'), { label: 'Volunteers', capacity: 4, signedUpUserIds: [] });
+  await assertSucceeds(batch.commit());
+})());
+await check('admin deletes an event with its slots and secret in one batch', (async () => {
+  const batch = writeBatch(adb);
+  batch.delete(doc(adb, 'events/new1/volunteerSlots/s1'));
+  batch.delete(doc(adb, 'events/new1/private/checkin'));
+  batch.delete(doc(adb, 'events/new1'));
+  await assertSucceeds(batch.commit());
+})());
+await check('member cannot create an event', assertFails(setDoc(doc(mdb, 'events/hack'), { title: 'x', startTime: minutes(1), endTime: minutes(2) })));
+await check('member cannot delete an event', assertFails(deleteDoc(doc(mdb, 'events/open'))));
 
 // ---- storage -------------------------------------------------------------
 const mst = member.storage();

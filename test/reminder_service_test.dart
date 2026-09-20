@@ -37,4 +37,29 @@ void main() {
       expect(fireTime, eventStart.subtract(const Duration(hours: 1)));
     });
   });
+
+  group('staleReminderIds', () {
+    test('cancels scheduled reminders nothing wants any more', () {
+      expect(staleReminderIds(pending: [1, 2, 3], desired: [2]), {1, 3});
+    });
+
+    test('keeps every reminder that is still wanted', () {
+      expect(staleReminderIds(pending: [1, 2], desired: [1, 2, 9]), isEmpty);
+    });
+
+    test('with reminders switched off (nothing wanted) cancels them all', () {
+      expect(staleReminderIds(pending: [4, 5], desired: const []), {4, 5});
+    });
+
+    test('a target maps to the same id used to schedule and cancel it', () {
+      final target = ReminderTarget(
+        eventId: 'e1',
+        slotId: 's1',
+        eventTitle: 'Meeting',
+        slotLabel: 'Setup',
+        eventStart: DateTime.now().add(const Duration(days: 3)),
+      );
+      expect(target.id, stableNotificationId('e1', 's1'));
+    });
+  });
 }

@@ -11,6 +11,7 @@ Widget _app({required PointsSummary points, required List<VolunteerRecord> volun
   return ProviderScope(
     overrides: [
       myPointsSummaryProvider.overrideWithValue(points),
+      myCheckInsProvider.overrideWith((ref) => Stream.value(points.checkIns)),
       myVolunteerRecordProvider.overrideWithValue(AsyncValue.data(volunteer)),
     ],
     child: const MaterialApp(home: MyPointsScreen()),
@@ -58,6 +59,7 @@ void main() {
         VolunteerRecord(event: _event('Fish Fry', DateTime(2026, 9, 12, 16)), slotLabels: const ['Kitchen'], hours: 2.5),
       ],
     ));
+    await tester.pump();
     await tester.pumpAndSettle();
 
     expect(find.text('6'), findsOneWidget);
@@ -73,9 +75,26 @@ void main() {
 
   testWidgets('shows friendly empty states with no points or volunteering', (tester) async {
     await tester.pumpWidget(_app(points: const PointsSummary(rosterPoints: 0, checkIns: []), volunteer: const []));
+    await tester.pump();
     await tester.pumpAndSettle();
 
     expect(find.textContaining('No points yet'), findsOneWidget);
     expect(find.textContaining('No volunteer shifts yet'), findsOneWidget);
+  });
+
+  testWidgets('does not claim "No points yet" while check-ins are still loading', (tester) async {
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        myPointsSummaryProvider.overrideWithValue(const PointsSummary(rosterPoints: 0, checkIns: [])),
+        // Never emits: the check-ins are still loading.
+        myCheckInsProvider.overrideWith((ref) => const Stream<List<AttendanceRecord>>.empty()),
+        myVolunteerRecordProvider.overrideWithValue(const AsyncValue.data(<VolunteerRecord>[])),
+      ],
+      child: const MaterialApp(home: MyPointsScreen()),
+    ));
+    await tester.pump();
+
+    expect(find.textContaining('No points yet'), findsNothing);
+    expect(find.byType(CircularProgressIndicator), findsWidgets);
   });
 }

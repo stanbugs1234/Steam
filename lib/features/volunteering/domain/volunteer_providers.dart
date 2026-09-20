@@ -54,25 +54,51 @@ class PastVolunteerEvent {
   double get hours => event.endTime.difference(event.startTime).inMinutes / 60;
 }
 
+/// The past, volunteer-eligible events — compared by value (id + times) so
+/// providers built on it only recompute when this set actually changes, not on
+/// every events snapshot (an admin editing an upcoming event, say).
+class _PastEventSet {
+  _PastEventSet(this.events)
+      : key = events
+            .map((e) => '${e.id}|${e.startTime.millisecondsSinceEpoch}|${e.endTime.millisecondsSinceEpoch}')
+            .join(',');
+
+  final List<ClubEvent> events;
+  final String key;
+
+  @override
+  bool operator ==(Object other) => other is _PastEventSet && other.key == key;
+
+  @override
+  int get hashCode => key.hashCode;
+}
+
+_PastEventSet _pastVolunteerEventsOf(List<ClubEvent> events) {
+  final now = DateTime.now();
+  return _PastEventSet([for (final e in events) if (e.needsVolunteers && e.endTime.isBefore(now)) e]);
+}
+
 /// Every past volunteer-eligible event with its slots, loaded once.
 ///
 /// Every event this looks at has already ended (its sign-up counts can't
 /// change anymore), so this reads each one's slots once via [getSlotsOnce]
-/// instead of opening a live listener per event — with a growing event
-/// history, a live listener per past event forever is exactly the kind of
-/// unbounded fan-out that made Home/Directory (which both depend on this,
-/// via the leaderboard/top-volunteer badge) slow to load. Both the hours
-/// totals and a member's own volunteer record derive from this one read.
+/// instead of opening a live listener per event. It only re-reads when the set
+/// of past events (or their times) changes, and reads them in parallel batches
+/// rather than one after another. Both the hours totals and a member's own
+/// volunteer record derive from this one read.
 final pastVolunteerEventsProvider = FutureProvider<List<PastVolunteerEvent>>((ref) async {
-  final events = await ref.watch(eventsProvider.future);
+  final past = await ref.watch(eventsProvider.selectAsync(_pastVolunteerEventsOf));
   final repo = ref.watch(volunteerRepositoryProvider);
-  final now = DateTime.now();
 
-  final past = <PastVolunteerEvent>[];
-  for (final event in events.where((e) => e.needsVolunteers && e.endTime.isBefore(now))) {
-    past.add(PastVolunteerEvent(event: event, slots: await repo.getSlotsOnce(event.id)));
+  const batchSize = 10;
+  final result = <PastVolunteerEvent>[];
+  for (var i = 0; i < past.events.length; i += batchSize) {
+    result.addAll(await Future.wait([
+      for (final event in past.events.skip(i).take(batchSize))
+        repo.getSlotsOnce(event.id).then((slots) => PastVolunteerEvent(event: event, slots: slots)),
+    ]));
   }
-  return past;
+  return result;
 });
 
 /// Total volunteer hours per member, derived from every past event a member
@@ -157,15 +183,31 @@ final myCommitmentsProvider = Provider<AsyncValue<List<MyCommitment>>>((ref) {
   return eventsAsync.when(
     data: (events) {
       final commitments = <MyCommitment>[];
+      var stillLoading = false;
+      Object? slotError;
+      StackTrace? slotStack;
       for (final event in events.where((e) => e.needsVolunteers && e.endTime.isAfter(now))) {
-        final slots = ref.watch(eventSlotsProvider(event.id)).value;
-        if (slots == null || myUid == null) continue;
+        final slotsAsync = ref.watch(eventSlotsProvider(event.id));
+        if (slotsAsync.hasError && slotError == null) {
+          slotError = slotsAsync.error;
+          slotStack = slotsAsync.stackTrace;
+        }
+        final slots = slotsAsync.valueOrNull;
+        if (slots == null) {
+          stillLoading = stillLoading || slotsAsync.isLoading;
+          continue;
+        }
+        if (myUid == null) continue;
         for (final slot in slots) {
           if (slot.signedUpUserIds.contains(myUid)) {
             commitments.add(MyCommitment(event: event, slot: slot));
           }
         }
       }
+      // Reporting "no commitments" before every slot list has arrived would
+      // flash an empty state (and hide real sign-ups) on each launch.
+      if (slotError != null) return AsyncValue.error(slotError, slotStack ?? StackTrace.empty);
+      if (stillLoading) return const AsyncValue.loading();
       commitments.sort((a, b) => a.event.startTime.compareTo(b.event.startTime));
       return AsyncValue.data(commitments);
     },

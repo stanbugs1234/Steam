@@ -156,25 +156,10 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
     required bool numeric,
     required Future<void> Function(String? value) save,
   }) async {
-    final controller = TextEditingController(text: current ?? '');
     final result = await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          keyboardType: numeric ? TextInputType.number : TextInputType.text,
-          inputFormatters: numeric ? [FilteringTextInputFormatter.digitsOnly] : null,
-          decoration: const InputDecoration(helperText: 'Leave empty to clear'),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Save')),
-        ],
-      ),
+      builder: (context) => _RosterFieldDialog(title: title, current: current, numeric: numeric),
     );
-    controller.dispose();
     if (result == null || !mounted) return;
 
     try {
@@ -457,6 +442,47 @@ class _InfoRow extends StatelessWidget {
       subtitle: Text(label),
       trailing: onTap != null ? const Icon(Icons.chevron_right) : null,
       onTap: onTap,
+    );
+  }
+}
+
+/// Prompt for one roster value. Owns its text controller so it's disposed with
+/// the dialog rather than while the dialog is still animating away.
+class _RosterFieldDialog extends StatefulWidget {
+  const _RosterFieldDialog({required this.title, required this.current, required this.numeric});
+
+  final String title;
+  final String? current;
+  final bool numeric;
+
+  @override
+  State<_RosterFieldDialog> createState() => _RosterFieldDialogState();
+}
+
+class _RosterFieldDialogState extends State<_RosterFieldDialog> {
+  late final TextEditingController _controller = TextEditingController(text: widget.current ?? '');
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        keyboardType: widget.numeric ? TextInputType.number : TextInputType.text,
+        inputFormatters: widget.numeric ? [FilteringTextInputFormatter.digitsOnly] : null,
+        decoration: const InputDecoration(helperText: 'Leave empty to clear'),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        TextButton(onPressed: () => Navigator.pop(context, _controller.text.trim()), child: const Text('Save')),
+      ],
     );
   }
 }

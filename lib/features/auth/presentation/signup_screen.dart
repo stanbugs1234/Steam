@@ -64,6 +64,21 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   Timer? _cooldownTimer;
 
   @override
+  void initState() {
+    super.initState();
+    // The router sends anyone who is signed in but has no profile yet back
+    // here (a fresh phone signup, or one interrupted part-way). Pick up at the
+    // "finish your profile" step rather than asking them to sign in again.
+    final signedIn = ref.read(authStateProvider).valueOrNull;
+    if (signedIn != null) {
+      _mode = _SignupMode.phone;
+      _verifiedPhoneUser = signedIn;
+      _e164Phone = signedIn.phoneNumber;
+      _phoneStep = _PhoneStep.completeProfile;
+    }
+  }
+
+  @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (!_modeInitializedFromQuery) {
@@ -112,15 +127,24 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       // trusted to claim a roster member's record automatically — the admin
       // sees any matching roster entry and merges it (a phone number, which
       // is SMS-verified, is what auto-merges).
-      await userRepo.createProfile(AppUser(
-        uid: uid,
-        name: _nameCtrl.text.trim(),
-        email: email,
-        phone: _phoneCtrl.text.trim(),
-        kids: _kids,
-        role: UserRole.member,
-        status: UserStatus.pending,
-      ));
+      try {
+        await userRepo.createProfile(AppUser(
+          uid: uid,
+          name: _nameCtrl.text.trim(),
+          email: email,
+          phone: _phoneCtrl.text.trim(),
+          kids: _kids,
+          role: UserRole.member,
+          status: UserStatus.pending,
+        ));
+      } catch (_) {
+        // Don't strand a login with no profile (a retry would just say the
+        // email is already in use).
+        try {
+          await credential.user?.delete();
+        } catch (_) {}
+        rethrow;
+      }
       // Router redirect will move to /pending-approval automatically.
     } on FirebaseAuthException catch (e) {
       setState(() => _errorText = friendlyError(e, fallback: 'Could not create your account. Please try again.'));
@@ -198,9 +222,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
     final userRepo = ref.read(userRepositoryProvider);
     try {
+      final phone = _e164Phone ?? firebaseUser.phoneNumber ?? '';
       AppUser? placeholder;
       try {
-        placeholder = await userRepo.findApprovedPlaceholderByPhone(_e164Phone ?? '');
+        placeholder = phone.isEmpty ? null : await userRepo.findApprovedPlaceholderByPhone(phone);
       } catch (_) {
         // If the lookup fails for any reason, fall through to a normal
         // pending signup rather than blocking the user from signing up.
@@ -210,8 +235,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       final merged = AppUser(
         uid: firebaseUser.uid,
         name: _phoneNameCtrl.text.trim(),
-        email: placeholder?.email ?? '',
-        phone: _e164Phone ?? '',
+        email: firebaseUser.email ?? placeholder?.email ?? '',
+        phone: phone,
         kids: _kids.isNotEmpty ? _kids : (placeholder?.kids ?? const []),
         role: UserRole.member,
         status: placeholder != null ? UserStatus.approved : UserStatus.pending,
@@ -228,15 +253,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         isNewMember: placeholder?.isNewMember ?? false,
       );
 
-      await userRepo.createProfile(merged);
-
       if (placeholder != null) {
-        try {
-          await userRepo.deletePlaceholder(placeholder.uid);
-        } catch (_) {
-          // Non-fatal: the real account was already created successfully;
-          // a leftover placeholder just needs manual cleanup by an admin.
-        }
+        await userRepo.createProfileClaiming(merged, placeholder.uid);
+      } else {
+        await userRepo.createProfile(merged);
       }
       // Router redirect will move to /pending-approval (or straight to /home
       // if merged as approved) automatically.
@@ -540,6 +560,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Text('Finish'),
+          ),
+          TextButton(
+            onPressed: _completingProfile ? null : () => ref.read(authRepositoryProvider).signOut(),
+            child: const Text('Use a different account'),
           ),
         ],
       ),

@@ -69,7 +69,7 @@ class _CheckInScannerScreenState extends ConsumerState<CheckInScannerScreen> {
       ),
     );
 
-    if (confirmed != true) {
+    if (confirmed != true || !mounted) {
       if (mounted) setState(() => _busy = false);
       return;
     }

@@ -7,6 +7,7 @@ import '../features/attendance/presentation/checkin_qr_screen.dart';
 import '../features/attendance/presentation/checkin_scanner_screen.dart';
 import '../features/attendance/presentation/my_points_screen.dart';
 import '../features/auth/domain/auth_providers.dart';
+import '../features/auth/presentation/account_error_screen.dart';
 import '../features/auth/presentation/denied_screen.dart';
 import '../features/auth/presentation/forgot_password_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
@@ -24,6 +25,71 @@ import '../models/app_user.dart';
 import 'home_shell.dart';
 
 const _authRoutes = {'/login', '/signup', '/forgot-password'};
+const _accountErrorRoute = '/account-error';
+
+/// Where to send someone who is at [location], given their sign-in state and
+/// the load state of their profile. Null means "stay". Kept free of Riverpod
+/// and Firebase so the whole decision table can be unit-tested.
+@visibleForTesting
+String? resolveRedirect({
+  required String location,
+  required bool signedIn,
+  required AsyncValue<AppUser?> appUser,
+}) {
+  if (!signedIn) {
+    return _authRoutes.contains(location) ? null : '/login';
+  }
+
+  final user = appUser.valueOrNull;
+
+  if (appUser.isLoading && user == null) {
+    return null;
+  }
+
+  // The profile failed to load (offline first launch, transient error). That
+  // says nothing about approval, so don't show the pending screen.
+  if (user == null && appUser.hasError) {
+    return location == _accountErrorRoute ? null : _accountErrorRoute;
+  }
+
+  // Signed in but no profile document yet: a brand-new signup (phone-verified,
+  // or an email account created a moment ago) that hasn't finished the
+  // "tell us your name" step — or someone whose profile was removed. Keep them
+  // on / send them to the sign-up screen, which resumes at that step. Sending
+  // them to "waiting for approval" would tear the sign-up screen down before
+  // the profile was ever created, leaving an account no admin can see.
+  if (user == null) {
+    return location == '/signup' ? null : '/signup';
+  }
+
+  if (user.status == UserStatus.pending) {
+    return location == '/pending-approval' ? null : '/pending-approval';
+  }
+
+  if (user.status == UserStatus.denied) {
+    return location == '/denied' ? null : '/denied';
+  }
+
+  // Approved from here on.
+  if (_authRoutes.contains(location) ||
+      location == '/pending-approval' ||
+      location == '/denied' ||
+      location == _accountErrorRoute) {
+    return '/home';
+  }
+
+  final adminOnly = location.startsWith('/admin') ||
+      location == '/news/new' ||
+      location == '/events/new' ||
+      location.endsWith('/edit') ||
+      location.endsWith('/slots') ||
+      location.endsWith('/qr');
+  if (adminOnly && !user.isAdmin) {
+    return '/home';
+  }
+
+  return null;
+}
 
 final routerProvider = Provider<GoRouter>((ref) {
   final refreshNotifier = ValueNotifier<int>(0);
@@ -34,52 +100,18 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/login',
     refreshListenable: refreshNotifier,
-    redirect: (context, state) {
-      final loc = state.matchedLocation;
-      final authState = ref.read(authStateProvider);
-      final firebaseUser = authState.valueOrNull;
-
-      if (firebaseUser == null) {
-        return _authRoutes.contains(loc) ? null : '/login';
-      }
-
-      final appUserAsync = ref.read(currentAppUserProvider);
-      final appUser = appUserAsync.valueOrNull;
-
-      if (appUserAsync.isLoading && appUser == null) {
-        return null;
-      }
-
-      if (appUser == null || appUser.status == UserStatus.pending) {
-        return loc == '/pending-approval' ? null : '/pending-approval';
-      }
-
-      if (appUser.status == UserStatus.denied) {
-        return loc == '/denied' ? null : '/denied';
-      }
-
-      // Approved from here on.
-      if (_authRoutes.contains(loc) || loc == '/pending-approval' || loc == '/denied') {
-        return '/home';
-      }
-
-      final adminOnly = loc.startsWith('/admin') ||
-          loc == '/news/new' ||
-          loc == '/events/new' ||
-          loc.endsWith('/edit') ||
-          loc.endsWith('/slots');
-      if (adminOnly && !appUser.isAdmin) {
-        return '/home';
-      }
-
-      return null;
-    },
+    redirect: (context, state) => resolveRedirect(
+      location: state.matchedLocation,
+      signedIn: ref.read(authStateProvider).valueOrNull != null,
+      appUser: ref.read(currentAppUserProvider),
+    ),
     routes: [
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(path: '/signup', builder: (context, state) => const SignupScreen()),
       GoRoute(path: '/forgot-password', builder: (context, state) => const ForgotPasswordScreen()),
       GoRoute(path: '/pending-approval', builder: (context, state) => const PendingApprovalScreen()),
       GoRoute(path: '/denied', builder: (context, state) => const DeniedScreen()),
+      GoRoute(path: _accountErrorRoute, builder: (context, state) => const AccountErrorScreen()),
       GoRoute(path: '/home', builder: (context, state) => const HomeShell()),
       GoRoute(
         path: '/directory/:uid',

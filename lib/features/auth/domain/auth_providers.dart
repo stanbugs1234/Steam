@@ -19,6 +19,14 @@ final authStateProvider = StreamProvider<User?>((ref) {
   return ref.watch(authRepositoryProvider).authStateChanges();
 });
 
+/// The signed-in user's uid, or null when signed out. Data streams watch this
+/// (rather than just being global) so signing out or switching accounts tears
+/// down their listeners and drops any cached permission error, instead of the
+/// next person on the device inheriting the previous session's state.
+final currentUidProvider = Provider<String?>((ref) {
+  return ref.watch(authStateProvider.select((auth) => auth.valueOrNull?.uid));
+});
+
 /// The signed-in user's app profile document (role, status, contact info),
 /// or null if signed out / profile not created yet.
 final currentAppUserProvider = StreamProvider<AppUser?>((ref) {
@@ -47,9 +55,11 @@ Stream<AppUser?> _watchUserResilient(UserRepository userRepo, String uid) async*
 }
 
 final pendingUsersProvider = StreamProvider<List<AppUser>>((ref) {
+  if (ref.watch(currentUidProvider) == null) return const Stream.empty();
   return ref.watch(userRepositoryProvider).watchPendingUsers();
 });
 
 final approvedMembersProvider = StreamProvider<List<AppUser>>((ref) {
+  if (ref.watch(currentUidProvider) == null) return const Stream.empty();
   return ref.watch(userRepositoryProvider).watchApprovedMembers();
 });

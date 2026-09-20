@@ -115,31 +115,23 @@ class _SlotTileState extends ConsumerState<_SlotTile> {
       if (signedUp) {
         await repo.cancel(eventId, slotId, uid);
       } else {
-        await repo.signUp(eventId, slotId, uid);
-      }
-      // Scheduling/cancelling the local reminder is best-effort: the sign-up
-      // itself already succeeded above, so a reminder failure (e.g. no
-      // notification permission) shouldn't surface as a sign-up error.
-      try {
-        final reminders = ref.read(reminderServiceProvider);
-        if (signedUp) {
-          await reminders.cancelVolunteerReminder(eventId, slotId);
-        } else if (widget.remindersEnabled) {
-          await reminders.scheduleVolunteerReminder(
-            eventId: eventId,
-            slotId: slotId,
-            eventTitle: widget.event.title,
-            slotLabel: widget.slot.label,
-            eventStart: widget.event.startTime,
-          );
+        final joined = await repo.signUp(eventId, slotId, uid);
+        // The reminder itself is scheduled by the reminder sync (it watches
+        // the member's sign-ups), so all that's needed here is to make sure
+        // the OS has been asked for notification permission — otherwise a
+        // member who never opens the Profile switch would never get one.
+        if (joined && widget.remindersEnabled) {
+          try {
+            await ref.read(reminderServiceProvider).requestPermission();
+          } catch (_) {
+            // Best-effort; the sign-up already succeeded.
+          }
         }
-      } catch (_) {
-        // Ignore — see comment above.
       }
     } on SlotFullException {
-      setState(() => _error = 'This slot just filled up.');
+      if (mounted) setState(() => _error = 'This slot just filled up.');
     } catch (e) {
-      setState(() => _error = friendlyError(e));
+      if (mounted) setState(() => _error = friendlyError(e));
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -149,6 +141,9 @@ class _SlotTileState extends ConsumerState<_SlotTile> {
   Widget build(BuildContext context) {
     final slot = widget.slot;
     final signedUp = widget.myUid != null && slot.signedUpUserIds.contains(widget.myUid);
+    // Sign-up closes when the event ends (the Firestore rules enforce it too);
+    // leaving a shift is always possible.
+    final ended = widget.event.endTime.isBefore(DateTime.now());
 
     return ListTile(
       title: Text(slot.label),
@@ -163,8 +158,8 @@ class _SlotTileState extends ConsumerState<_SlotTile> {
           : (signedUp
               ? OutlinedButton(onPressed: () => _toggle(true), child: const Text('Cancel'))
               : FilledButton(
-                  onPressed: slot.isFull ? null : () => _toggle(false),
-                  child: Text(slot.isFull ? 'Full' : 'Sign Up'),
+                  onPressed: (slot.isFull || ended) ? null : () => _toggle(false),
+                  child: Text(ended ? 'Ended' : (slot.isFull ? 'Full' : 'Sign Up')),
                 )),
     );
   }

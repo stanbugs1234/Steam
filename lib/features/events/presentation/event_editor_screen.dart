@@ -96,7 +96,7 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
     setState(() {
       if (isStart) {
         _start = combined;
-        if (_end.isBefore(_start)) _end = _start.add(const Duration(hours: 1));
+        if (!_end.isAfter(_start)) _end = _start.add(const Duration(hours: 1));
       } else {
         _end = combined;
       }
@@ -124,7 +124,7 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_end.isBefore(_start)) {
+    if (!_end.isAfter(_start)) {
       setState(() => _error = 'End time must be after start time.');
       return;
     }
@@ -143,7 +143,7 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
 
       if (_isEditing) {
         final eventId = widget.eventId!;
-        await ref.read(eventRepositoryProvider).updateEvent(eventId, {
+        final fields = {
           'title': _titleCtrl.text.trim(),
           'description': _descriptionCtrl.text.trim(),
           'location': _locationCtrl.text.trim(),
@@ -151,32 +151,35 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
           'endTime': Timestamp.fromDate(_end),
           'needsVolunteers': _needsVolunteers,
           'checkInEnabled': _checkInEnabled,
-        });
-        if (writeSingleSlot) {
-          if (_existingSlots.isEmpty) {
-            await volunteerRepo.createSlot(
-              eventId,
-              VolunteerSlot(
-                id: volunteerRepo.newSlotId(eventId),
-                label: 'Volunteers',
-                capacity: volunteersNeeded!,
-                signedUpUserIds: const [],
-              ),
-            );
-          } else if (volunteersNeeded != _existingSlots.first.capacity) {
-            await volunteerRepo.updateSlotDetails(
-              eventId,
-              _existingSlots.first.id,
-              label: _existingSlots.first.label,
+        };
+        final eventRepo = ref.read(eventRepositoryProvider);
+        if (writeSingleSlot && _existingSlots.isEmpty) {
+          await eventRepo.updateEventAndSlot(
+            eventId,
+            fields,
+            newSlot: VolunteerSlot(
+              id: volunteerRepo.newSlotId(eventId),
+              label: 'Volunteers',
               capacity: volunteersNeeded!,
-            );
-          }
+              signedUpUserIds: const [],
+            ),
+          );
+        } else if (writeSingleSlot && volunteersNeeded != _existingSlots.first.capacity) {
+          await eventRepo.updateEventAndSlot(
+            eventId,
+            fields,
+            existingSlotId: _existingSlots.first.id,
+            existingSlotLabel: _existingSlots.first.label,
+            newCapacity: volunteersNeeded,
+          );
+        } else {
+          await eventRepo.updateEvent(eventId, fields);
         }
       } else {
         final me = ref.read(currentAppUserProvider).value;
         final repo = ref.read(eventRepositoryProvider);
         final eventId = repo.newEventId();
-        await repo.createEvent(ClubEvent(
+        final event = ClubEvent(
           id: eventId,
           title: _titleCtrl.text.trim(),
           description: _descriptionCtrl.text.trim(),
@@ -186,10 +189,10 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
           needsVolunteers: _needsVolunteers,
           createdBy: me?.uid ?? '',
           checkInEnabled: _checkInEnabled,
-        ));
+        );
         if (writeSingleSlot) {
-          await volunteerRepo.createSlot(
-            eventId,
+          await repo.createEventWithSlot(
+            event,
             VolunteerSlot(
               id: volunteerRepo.newSlotId(eventId),
               label: 'Volunteers',
@@ -197,11 +200,13 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
               signedUpUserIds: const [],
             ),
           );
+        } else {
+          await repo.createEvent(event);
         }
       }
       if (mounted) context.pop();
     } catch (e) {
-      setState(() => _error = friendlyError(e, fallback: "Couldn't save the event. Please try again."));
+      if (mounted) setState(() => _error = friendlyError(e, fallback: "Couldn't save the event. Please try again."));
     } finally {
       if (mounted) setState(() => _saving = false);
     }

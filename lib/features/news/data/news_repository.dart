@@ -13,9 +13,14 @@ class NewsRepository {
   /// uploaded (named after the post ID) prior to creating the post doc.
   String newPostId() => _newsRef.doc().id;
 
+  /// The newest posts only, so the feed listener (and its read cost) doesn't
+  /// grow forever with the club's history.
+  static const feedLimit = 50;
+
   Stream<List<NewsPost>> watchFeed() {
     return _newsRef
         .orderBy('createdAt', descending: true)
+        .limit(feedLimit)
         .snapshots()
         .map((snap) => snap.docs.map((d) => NewsPost.fromFirestore(d.id, d.data())).toList());
   }

@@ -44,21 +44,27 @@ class VolunteerRepository {
     return _slotsRef(eventId).doc(slotId).delete();
   }
 
-  Future<void> signUp(String eventId, String slotId, String uid) async {
+  /// Adds [uid] to the slot. Returns true if they were newly added, false if
+  /// nothing changed (the slot was deleted, or they were already in it) — so
+  /// callers don't act on a sign-up that didn't happen.
+  Future<bool> signUp(String eventId, String slotId, String uid) async {
     final ref = _slotsRef(eventId).doc(slotId);
-    await _firestore.runTransaction((tx) async {
+    return _firestore.runTransaction((tx) async {
       final snap = await tx.get(ref);
       final data = snap.data();
-      if (data == null) return;
-      final signedUp = List<String>.from(data['signedUpUserIds'] as List? ?? const []);
-      final capacity = data['capacity'] as int? ?? 0;
-      if (signedUp.contains(uid)) return;
+      if (data == null) return false;
+      final signedUp = data['signedUpUserIds'] is List
+          ? (data['signedUpUserIds'] as List).whereType<String>().toList()
+          : <String>[];
+      final capacity = data['capacity'] is num ? (data['capacity'] as num).toInt() : 0;
+      if (signedUp.contains(uid)) return false;
       if (signedUp.length >= capacity) {
         throw const SlotFullException();
       }
       tx.update(ref, {
         'signedUpUserIds': FieldValue.arrayUnion([uid]),
       });
+      return true;
     });
   }
 

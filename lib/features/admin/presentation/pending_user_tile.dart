@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/utils/friendly_error.dart';
 import '../../../models/app_user.dart';
+import '../../auth/data/user_repository.dart';
 import '../../auth/domain/auth_providers.dart';
 
 /// One pending signup with Approve / Deny actions and, when the signup
@@ -19,18 +21,18 @@ class PendingUserTile extends ConsumerStatefulWidget {
 
 class _PendingUserTileState extends ConsumerState<PendingUserTile> {
   bool _working = false;
-  late final Future<AppUser?> _duplicateFuture;
 
-  @override
-  void initState() {
-    super.initState();
-    _duplicateFuture = ref.read(userRepositoryProvider).findPossibleDuplicate(widget.user);
+  void _showError(Object e, String fallback) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyError(e, fallback: fallback))));
   }
 
   Future<void> _respond(UserStatus status) async {
     setState(() => _working = true);
     try {
       await ref.read(userRepositoryProvider).setStatus(widget.user.uid, status);
+    } catch (e) {
+      _showError(e, "Couldn't update this request. Please try again.");
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -60,6 +62,8 @@ class _PendingUserTileState extends ConsumerState<PendingUserTile> {
     setState(() => _working = true);
     try {
       await ref.read(userRepositoryProvider).mergeAndApprove(widget.user, placeholder);
+    } catch (e) {
+      _showError(e, "Couldn't merge this request. Nothing was changed — please try again.");
     } finally {
       if (mounted) setState(() => _working = false);
     }
@@ -97,50 +101,67 @@ class _PendingUserTileState extends ConsumerState<PendingUserTile> {
                   ],
                 ),
         ),
-        FutureBuilder<AppUser?>(
-          future: _duplicateFuture,
-          builder: (context, snapshot) {
-            final duplicate = snapshot.data;
-            if (duplicate == null) return const SizedBox.shrink();
-
-            final isPlaceholder = duplicate.uid.startsWith('imported_');
-            final message = isPlaceholder
-                ? 'Possible match: an imported roster entry for "${duplicate.name}" shares this '
-                    'phone or email${duplicate.kids.isEmpty ? '' : ', with ${duplicate.kidCount} '
-                        '${duplicate.kidCount == 1 ? 'kid' : 'kids'} on file: '
-                        '${duplicate.kids.map((k) => k.name).join(', ')}'}.'
-                : 'Possible duplicate: an existing account for "${duplicate.name}" already uses this '
-                    "phone or email. Merging live accounts isn't automated — consider denying this "
-                    'request and asking them to sign in with their original account instead.';
-
-            return Container(
-              width: double.infinity,
-              color: Theme.of(context).colorScheme.errorContainer,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    message,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: Theme.of(context).colorScheme.onErrorContainer),
-                  ),
-                  if (isPlaceholder)
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: TextButton(
-                        onPressed: _working ? null : () => _mergeAndApprove(duplicate),
-                        child: const Text('Merge & Approve'),
-                      ),
-                    ),
-                ],
-              ),
-            );
-          },
-        ),
+        _DuplicateBanner(user: user, working: _working, onMerge: _mergeAndApprove),
       ],
+    );
+  }
+}
+
+/// The "possible match / duplicate" notice for a pending signup, worked out
+/// from the member list the app already has loaded.
+class _DuplicateBanner extends ConsumerWidget {
+  const _DuplicateBanner({required this.user, required this.working, required this.onMerge});
+
+  final AppUser user;
+  final bool working;
+  final Future<void> Function(AppUser placeholder) onMerge;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colors = Theme.of(context).colorScheme;
+    final textStyle = Theme.of(context).textTheme.bodySmall?.copyWith(color: colors.onErrorContainer);
+    final approved = ref.watch(approvedMembersProvider);
+
+    if (approved.hasError && !approved.hasValue) {
+      return _banner(colors, [
+        Text(
+          "Couldn't check this signup against the roster. Reload before approving, or you may create a duplicate.",
+          style: textStyle,
+        ),
+      ]);
+    }
+    final duplicate = UserRepository.findPossibleDuplicate(user, approved.valueOrNull ?? const []);
+    if (duplicate == null) return const SizedBox.shrink();
+
+    final isPlaceholder = duplicate.uid.startsWith('imported_');
+    final message = isPlaceholder
+        ? 'Possible match: an imported roster entry for "${duplicate.name}" shares this '
+            'phone or email${duplicate.kids.isEmpty ? '' : ', with ${duplicate.kidCount} '
+                '${duplicate.kidCount == 1 ? 'kid' : 'kids'} on file: '
+                '${duplicate.kids.map((k) => k.name).join(', ')}'}.'
+        : 'Possible duplicate: an existing account for "${duplicate.name}" already uses this '
+            "phone or email. Merging live accounts isn't automated — consider denying this "
+            'request and asking them to sign in with their original account instead.';
+
+    return _banner(colors, [
+      Text(message, style: textStyle),
+      if (isPlaceholder)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            onPressed: working ? null : () => onMerge(duplicate),
+            child: const Text('Merge & Approve'),
+          ),
+        ),
+    ]);
+  }
+
+  Widget _banner(ColorScheme colors, List<Widget> children) {
+    return Container(
+      width: double.infinity,
+      color: colors.errorContainer,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
     );
   }
 }

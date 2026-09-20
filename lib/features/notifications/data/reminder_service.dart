@@ -99,6 +99,36 @@ class ReminderService {
     );
   }
 
+  /// Makes the device's scheduled reminders match [targets] exactly: schedules
+  /// (or re-schedules, so a moved event keeps the right time and title) every
+  /// target, and cancels any scheduled reminder that no longer corresponds to
+  /// one — a shift the member left, an event or slot an admin deleted, or all
+  /// of them when reminders are switched off. Reminders are local to a device,
+  /// so this is also what restores them after a reinstall or on a new phone.
+  Future<void> syncVolunteerReminders(List<ReminderTarget> targets) async {
+    if (!_supported) return;
+    await _ensureInitialized();
+    if (!_initialized) return;
+
+    final wanted = {
+      for (final t in targets)
+        if (reminderFireTime(t.eventStart) != null) t.id,
+    };
+    final pending = await _plugin.pendingNotificationRequests();
+    for (final id in staleReminderIds(pending: pending.map((p) => p.id), desired: wanted)) {
+      await _plugin.cancel(id: id);
+    }
+    for (final t in targets) {
+      await scheduleVolunteerReminder(
+        eventId: t.eventId,
+        slotId: t.slotId,
+        eventTitle: t.eventTitle,
+        slotLabel: t.slotLabel,
+        eventStart: t.eventStart,
+      );
+    }
+  }
+
   Future<void> cancelVolunteerReminder(String eventId, String slotId) async {
     if (!_supported) return;
     await _ensureInitialized();
@@ -127,4 +157,29 @@ int stableNotificationId(String eventId, String slotId) {
     hash = (hash * fnvPrime) & 0x7fffffff;
   }
   return hash;
+}
+
+/// One volunteer shift a member should be reminded about.
+class ReminderTarget {
+  const ReminderTarget({
+    required this.eventId,
+    required this.slotId,
+    required this.eventTitle,
+    required this.slotLabel,
+    required this.eventStart,
+  });
+
+  final String eventId;
+  final String slotId;
+  final String eventTitle;
+  final String slotLabel;
+  final DateTime eventStart;
+
+  int get id => stableNotificationId(eventId, slotId);
+}
+
+/// The scheduled reminder ids that should be cancelled because nothing wants
+/// them any more. Pure so the reconciliation rule is unit-testable.
+Set<int> staleReminderIds({required Iterable<int> pending, required Iterable<int> desired}) {
+  return pending.toSet().difference(desired.toSet());
 }

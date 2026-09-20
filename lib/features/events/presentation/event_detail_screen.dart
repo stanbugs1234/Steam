@@ -91,10 +91,18 @@ class EventDetailScreen extends ConsumerWidget {
                           confirmLabel: 'Delete',
                           destructive: true,
                         );
-                        if (confirmed) {
+                        if (!confirmed) return;
+                        try {
                           await ref.read(eventRepositoryProvider).deleteEvent(event.id);
-                          if (context.mounted) context.pop();
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(friendlyError(e, fallback: "Couldn't delete this event. Please try again."))),
+                            );
+                          }
+                          return;
                         }
+                        if (context.mounted) context.pop();
                       },
                     ),
                   ],

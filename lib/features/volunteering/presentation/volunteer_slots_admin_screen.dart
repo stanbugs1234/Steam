@@ -2,6 +2,7 @@ import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/utils/friendly_error.dart';
 import '../../../core/widgets/capacity_bar.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_state.dart';
@@ -15,63 +16,35 @@ class VolunteerSlotsAdminScreen extends ConsumerWidget {
 
   final String eventId;
 
+  void _showError(BuildContext context, Object e, String fallback) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(friendlyError(e, fallback: fallback))));
+  }
+
   Future<void> _showSlotDialog(BuildContext context, WidgetRef ref, {VolunteerSlot? existing}) async {
-    final labelCtrl = TextEditingController(text: existing?.label ?? '');
-    final capacityCtrl = TextEditingController(text: existing?.capacity.toString() ?? '');
-    final formKey = GlobalKey<FormState>();
-
-    final result = await showDialog<bool>(
+    final result = await showDialog<_SlotForm>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(existing == null ? 'New Volunteer Slot' : 'Edit Slot'),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: labelCtrl,
-                decoration: const InputDecoration(labelText: 'Label (e.g. Setup Crew)'),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: capacityCtrl,
-                decoration: const InputDecoration(labelText: 'Capacity'),
-                keyboardType: TextInputType.number,
-                validator: (v) {
-                  final n = int.tryParse(v ?? '');
-                  if (n == null || n < 1) return 'Enter a number of at least 1';
-                  return null;
-                },
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) Navigator.pop(context, true);
-            },
-            child: Text(existing == null ? 'Create' : 'Save'),
-          ),
-        ],
-      ),
+      builder: (context) => _SlotDialog(existing: existing),
     );
-
-    if (result != true) return;
+    if (result == null) return;
 
     final repo = ref.read(volunteerRepositoryProvider);
-    final label = labelCtrl.text.trim();
-    final capacity = int.parse(capacityCtrl.text.trim());
-    if (existing == null) {
-      await repo.createSlot(
-        eventId,
-        VolunteerSlot(id: repo.newSlotId(eventId), label: label, capacity: capacity, signedUpUserIds: const []),
-      );
-    } else {
-      await repo.updateSlotDetails(eventId, existing.id, label: label, capacity: capacity);
+    try {
+      if (existing == null) {
+        await repo.createSlot(
+          eventId,
+          VolunteerSlot(
+            id: repo.newSlotId(eventId),
+            label: result.label,
+            capacity: result.capacity,
+            signedUpUserIds: const [],
+          ),
+        );
+      } else {
+        await repo.updateSlotDetails(eventId, existing.id, label: result.label, capacity: result.capacity);
+      }
+    } catch (e) {
+      if (context.mounted) _showError(context, e, "Couldn't save this slot. Please try again.");
     }
   }
 
@@ -85,8 +58,11 @@ class VolunteerSlotsAdminScreen extends ConsumerWidget {
       confirmLabel: 'Delete',
       destructive: true,
     );
-    if (confirmed) {
+    if (!confirmed) return;
+    try {
       await ref.read(volunteerRepositoryProvider).deleteSlot(eventId, slot.id);
+    } catch (e) {
+      if (context.mounted) _showError(context, e, "Couldn't delete this slot. Please try again.");
     }
   }
 
@@ -160,6 +136,97 @@ class VolunteerSlotsAdminScreen extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (err, _) => ErrorState(message: "Couldn't load volunteer slots.", error: err),
       ),
+    );
+  }
+}
+
+class _SlotForm {
+  const _SlotForm({required this.label, required this.capacity});
+
+  final String label;
+  final int capacity;
+}
+
+/// The add/edit slot dialog. Its own State owns the text controllers so they're
+/// disposed with the dialog (after its exit animation), not while it's still
+/// on screen.
+class _SlotDialog extends StatefulWidget {
+  const _SlotDialog({this.existing});
+
+  final VolunteerSlot? existing;
+
+  @override
+  State<_SlotDialog> createState() => _SlotDialogState();
+}
+
+class _SlotDialogState extends State<_SlotDialog> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _labelCtrl;
+  late final TextEditingController _capacityCtrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _labelCtrl = TextEditingController(text: widget.existing?.label ?? '');
+    _capacityCtrl = TextEditingController(text: widget.existing?.capacity.toString() ?? '');
+  }
+
+  @override
+  void dispose() {
+    _labelCtrl.dispose();
+    _capacityCtrl.dispose();
+    super.dispose();
+  }
+
+  String? _validateCapacity(String? v) {
+    final n = int.tryParse(v?.trim() ?? '');
+    if (n == null || n < 1) return 'Enter a number of at least 1';
+    // Lowering capacity below the people already signed up would leave the slot
+    // "over full" with nobody able to cancel their way back under it.
+    final signedUp = widget.existing?.signedUpUserIds.length ?? 0;
+    if (n < signedUp) return '$signedUp people are already signed up';
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final existing = widget.existing;
+    return AlertDialog(
+      title: Text(existing == null ? 'New Volunteer Slot' : 'Edit Slot'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextFormField(
+              controller: _labelCtrl,
+              decoration: const InputDecoration(labelText: 'Label (e.g. Setup Crew)'),
+              validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _capacityCtrl,
+              decoration: const InputDecoration(labelText: 'Capacity'),
+              keyboardType: TextInputType.number,
+              validator: _validateCapacity,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        FilledButton(
+          onPressed: () {
+            if (_formKey.currentState!.validate()) {
+              Navigator.pop(
+                context,
+                _SlotForm(label: _labelCtrl.text.trim(), capacity: int.parse(_capacityCtrl.text.trim())),
+              );
+            }
+          },
+          child: Text(existing == null ? 'Create' : 'Save'),
+        ),
+      ],
     );
   }
 }
