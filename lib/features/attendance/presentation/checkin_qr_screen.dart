@@ -62,7 +62,7 @@ class CheckInQrScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(message: "Couldn't load this event.", error: err),
+        error: (err, _) => ErrorState(message: "Couldn't load this event.", error: err, onRetry: () => ref.invalidate(eventsProvider)),
       ),
     );
   }

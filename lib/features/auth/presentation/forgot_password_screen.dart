@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../domain/auth_providers.dart';
+import '../../../core/utils/friendly_error.dart';
 
 class ForgotPasswordScreen extends ConsumerStatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -38,9 +39,13 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
         _message = 'Check your email for a reset link.';
       });
     } on FirebaseAuthException catch (e) {
+      // Don't reveal whether an address has an account.
+      final unknownEmail = e.code == 'user-not-found';
       setState(() {
-        _isError = true;
-        _message = e.message ?? 'Could not send reset email.';
+        _isError = !unknownEmail;
+        _message = unknownEmail
+            ? 'Check your email for a reset link.'
+            : friendlyError(e, fallback: 'Could not send the reset email. Please try again.');
       });
     } finally {
       if (mounted) setState(() => _submitting = false);
@@ -53,6 +58,7 @@ class _ForgotPasswordScreenState extends ConsumerState<ForgotPasswordScreen> {
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
+          tooltip: 'Back to sign in',
           onPressed: () => context.go('/login'),
         ),
         title: const Text('Reset Password'),

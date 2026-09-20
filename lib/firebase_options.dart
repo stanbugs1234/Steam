@@ -57,7 +57,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyC9neGwt7RqcYKTpXlzUoXJYpJgbPLgMtg',
-    appId: '1:968754784411:android:5b2af43e46e87644c4fe3e',
+    appId: '1:968754784411:android:8d68f3296954e2a7c4fe3e',
     messagingSenderId: '968754784411',
     projectId: 'steam-club-app',
     storageBucket: 'steam-club-app.firebasestorage.app',

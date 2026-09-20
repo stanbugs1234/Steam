@@ -128,6 +128,13 @@ class UserRepository {
           .toList(),
       'status': UserStatus.approved.name,
       'mergedFromId': placeholder.uid,
+      // The roster's own records live on the placeholder, which is deleted
+      // below — carry them over or they're gone.
+      'memberNumber': placeholder.memberNumber,
+      'clubPoints': placeholder.clubPoints,
+      'yearlyPoints': placeholder.yearlyPoints,
+      'duesPaid': placeholder.duesPaid,
+      'isNewMember': placeholder.isNewMember,
     };
     // Preserve the placeholder's original join date on merge — otherwise the
     // pending signup's own createdAt would overwrite it and lose their real
@@ -166,6 +173,20 @@ class UserRepository {
 
   Future<void> setIsNewMember(String uid, bool isNewMember) {
     return _usersRef.doc(uid).update({'isNewMember': isNewMember});
+  }
+
+  /// Roster records the club maintains for a member. Passing null clears the
+  /// value.
+  Future<void> setMemberNumber(String uid, String? memberNumber) {
+    return _usersRef.doc(uid).update({'memberNumber': memberNumber});
+  }
+
+  Future<void> setYearlyPoints(String uid, int? points) {
+    return _usersRef.doc(uid).update({'yearlyPoints': points});
+  }
+
+  Future<void> setClubPoints(String uid, int? points) {
+    return _usersRef.doc(uid).update({'clubPoints': points});
   }
 
   Future<void> updateProfile(String uid, Map<String, dynamic> fields) {

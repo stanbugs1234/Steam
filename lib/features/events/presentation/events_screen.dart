@@ -111,7 +111,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
           ],
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(message: "Couldn't load events right now.", error: err),
+        error: (err, _) => ErrorState(message: "Couldn't load events right now.", error: err, onRetry: () => ref.invalidate(eventsProvider)),
       ),
     );
   }

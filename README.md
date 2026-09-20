@@ -1,17 +1,45 @@
-# steam_app
+# STEAM Club
 
-A new Flutter project.
+Member app for the St. Edward Association of Men: news, events, volunteer
+sign-ups, meeting check-in (QR), points, and the member directory. Flutter +
+Firebase (Auth, Firestore, Storage, Crashlytics). iOS first, Android next.
 
-## Getting Started
+## How it works
 
-This project is a starting point for a Flutter application.
+- **Sign-in:** phone (SMS code) or email/password. New members are *pending*
+  until an admin approves them. Members preloaded from the roster are stored as
+  `users/imported_*` placeholders; when someone signs up with a matching phone
+  or email they are merged into it (points, dues, member #, join date carry
+  over) and approved automatically.
+- **Roles:** `member` and `admin`. Admins approve members, post news/events,
+  manage volunteer slots, and maintain roster fields (member #, points, dues).
+- **Data:** Firestore (`users`, `events` + `volunteerSlots`, `news`,
+  `users/{uid}/attendance`), Storage (`profile_photos`, `news_images`).
+  Everything is guarded by `firestore.rules` / `storage.rules`.
 
-A few resources to get you started if this is your first Flutter project:
+## Run it
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+```
+flutter pub get
+flutter run                 # a connected iPhone / simulator / Android device
+flutter analyze && flutter test
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Firebase project: `steam-club-app` (config is checked in: `lib/firebase_options.dart`,
+`ios/Runner/GoogleService-Info.plist`, `android/app/google-services.json`).
+
+## Before changing security rules
+
+```
+cd tools/rules-tests && npm install && npm test
+```
+
+Runs the rules against the local emulators. Deploy with
+`firebase deploy --only firestore:rules,storage` only when it passes.
+
+## Shipping
+
+See [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md) (store submission,
+Firebase console settings) and [docs/RUNBOOK.md](docs/RUNBOOK.md) (running the
+club's data day to day). `tools/roster-check` is a read-only pre-launch check of
+the roster.

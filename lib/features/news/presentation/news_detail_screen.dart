@@ -13,6 +13,7 @@ import '../../events/domain/event_providers.dart';
 import '../../sharing/share_content.dart';
 import '../domain/news_providers.dart';
 import 'news_widgets.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 
 class NewsDetailScreen extends ConsumerWidget {
   const NewsDetailScreen({super.key, required this.postId});
@@ -20,18 +21,14 @@ class NewsDetailScreen extends ConsumerWidget {
   final String postId;
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref, NewsPost post) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete post?'),
-        content: const Text('This cannot be undone.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Delete post?',
+      message: 'This cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
     );
-    if (confirmed == true) {
+    if (confirmed) {
       await ref.read(newsRepositoryProvider).deletePost(post.id);
       if (context.mounted) context.pop();
     }
@@ -56,10 +53,12 @@ class NewsDetailScreen extends ConsumerWidget {
           if (post != null && isAdmin) ...[
             IconButton(
               icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Edit post',
               onPressed: () => context.push('/news/${post.id}/edit'),
             ),
             IconButton(
               icon: const Icon(Icons.delete_outline),
+              tooltip: 'Delete post',
               onPressed: () => _confirmDelete(context, ref, post),
             ),
           ],
@@ -74,7 +73,7 @@ class NewsDetailScreen extends ConsumerWidget {
           return _PostBody(post: post);
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(message: "Couldn't load this post.", error: err),
+        error: (err, _) => ErrorState(message: "Couldn't load this post.", error: err, onRetry: () => ref.invalidate(newsFeedProvider)),
       ),
     );
   }

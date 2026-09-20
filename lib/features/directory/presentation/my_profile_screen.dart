@@ -6,8 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/legal_links.dart';
 import '../../../core/utils/membership_duration.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 import '../../../core/utils/phone_format.dart';
 import '../../../core/widgets/error_state.dart';
 import '../../../core/widgets/member_badges.dart';
@@ -15,10 +18,8 @@ import '../../../core/widgets/section_card.dart';
 import '../../../core/widgets/stat_tile.dart';
 import '../../../models/app_user.dart';
 import '../../attendance/domain/attendance_providers.dart';
-import '../../auth/data/account_deletion_service.dart';
-import '../../auth/domain/account_providers.dart';
 import '../../auth/domain/auth_providers.dart';
-import '../../events/domain/event_providers.dart';
+import '../../auth/presentation/delete_account_flow.dart';
 import '../../notifications/domain/notification_providers.dart';
 import '../../volunteering/domain/volunteer_providers.dart';
 import 'editable_avatar.dart';
@@ -64,110 +65,15 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
     }
   }
 
-  Future<bool> _confirm({
-    required String title,
-    required String message,
-    required String action,
-    bool destructive = false,
-  }) async {
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: destructive ? TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error) : null,
-            child: Text(action),
-          ),
-        ],
-      ),
-    );
-    return result == true;
-  }
-
   Future<void> _signOut() async {
     final auth = ref.read(authRepositoryProvider);
-    final ok = await _confirm(
+    final ok = await showConfirmDialog(
+      context,
       title: 'Sign out?',
       message: "You'll need to sign in again to use the app.",
-      action: 'Sign Out',
+      confirmLabel: 'Sign Out',
     );
     if (ok) await auth.signOut();
-  }
-
-  Future<void> _info(String title, String message, {String? actionLabel, VoidCallback? onAction}) {
-    return showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(message),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(actionLabel == null ? 'OK' : 'Cancel')),
-          if (actionLabel != null)
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                onAction?.call();
-              },
-              child: Text(actionLabel),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _deleteAccount(AppUser me) async {
-    final service = ref.read(accountDeletionServiceProvider);
-    final auth = ref.read(authRepositoryProvider);
-    final admins = (ref.read(approvedMembersProvider).value ?? const []).where((m) => m.isAdmin).length;
-    final now = DateTime.now();
-    final upcoming = (ref.read(eventsProvider).value ?? const []).where((e) => e.endTime.isAfter(now)).toList();
-
-    if (me.isAdmin && admins <= 1) {
-      await _info(
-        "You're the only admin",
-        'Before deleting your account, make another member an admin '
-            '(Directory → their profile → Admin access) so the club is never left without one.',
-      );
-      return;
-    }
-    if (!service.signedInRecently) {
-      await _info(
-        'Sign in again first',
-        'For your security, please sign out and sign back in, then delete your account right away.',
-        actionLabel: 'Sign Out',
-        onAction: auth.signOut,
-      );
-      return;
-    }
-    if (!await _confirm(
-      title: 'Delete your account?',
-      message: 'This permanently deletes your Steam Club account: your profile, points and volunteer history, '
-          'and your spot in upcoming volunteer shifts. This can\'t be undone.',
-      action: 'Delete Account',
-      destructive: true,
-    )) {
-      return;
-    }
-
-    setState(() => _deleting = true);
-    try {
-      await service.deleteMyAccount(me: me, upcomingEvents: upcoming, isOnlyAdmin: admins <= 1);
-      // Success signs the member out, which moves the app to the login screen.
-    } on RecentLoginRequiredException {
-      if (mounted) await _info('Sign in again first', 'Please sign out and sign back in, then try again.');
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Couldn't delete your account. Please try again.")),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _deleting = false);
-    }
   }
 
   @override
@@ -193,7 +99,14 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
                 user: user,
                 onSetReminders: (value) => _setRemindersEnabled(user.uid, value),
                 onSignOut: _signOut,
-                onDeleteAccount: () => _deleteAccount(user),
+                onDeleteAccount: () => confirmAndDeleteAccount(
+                  context: context,
+                  ref: ref,
+                  me: user,
+                  onBusy: (busy) {
+                    if (mounted) setState(() => _deleting = busy);
+                  },
+                ),
               ),
               if (_deleting)
                 Positioned.fill(
@@ -218,7 +131,7 @@ class _MyProfileScreenState extends ConsumerState<MyProfileScreen> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(message: "Couldn't load your profile.", error: err),
+        error: (err, _) => ErrorState(message: "Couldn't load your profile.", error: err, onRetry: () => ref.invalidate(currentAppUserProvider)),
       ),
     );
   }
@@ -450,6 +363,12 @@ class _ProfileBody extends ConsumerWidget {
                   trailing: const Icon(Icons.chevron_right),
                   onTap: () => context.push('/leaderboard'),
                 ),
+                const Divider(height: 1),
+                _LinkTile(icon: Icons.help_outline, title: 'Help & support', url: supportUrl),
+                const Divider(height: 1),
+                _LinkTile(icon: Icons.privacy_tip_outlined, title: 'Privacy Policy', url: privacyPolicyUrl),
+                const Divider(height: 1),
+                _LinkTile(icon: Icons.description_outlined, title: 'Terms of Use', url: termsOfUseUrl),
                 if (user.isAdmin) ...[
                   const Divider(height: 1),
                   ListTile(
@@ -488,7 +407,7 @@ class _ProfileBody extends ConsumerWidget {
               Padding(
                 padding: const EdgeInsets.only(top: 12),
                 child: Text(
-                  'Steam Club · $version',
+                  'STEAM Club · $version',
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodySmall?.copyWith(color: colors.onSurfaceVariant),
                 ),
@@ -513,6 +432,30 @@ class _InfoRow extends StatelessWidget {
       leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
       title: Text(value, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w500)),
       subtitle: Text(label),
+    );
+  }
+}
+
+class _LinkTile extends StatelessWidget {
+  const _LinkTile({required this.icon, required this.title, required this.url});
+
+  final IconData icon;
+  final String title;
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
+      title: Text(title),
+      trailing: const Icon(Icons.open_in_new, size: 18),
+      onTap: () async {
+        try {
+          await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+        } catch (_) {
+          // Nothing useful to do if the device can't open a web link.
+        }
+      },
     );
   }
 }

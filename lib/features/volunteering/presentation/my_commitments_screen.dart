@@ -1,21 +1,48 @@
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../../core/widgets/empty_state.dart';
+import '../../../core/utils/friendly_error.dart';
+import '../../../core/widgets/capacity_bar.dart';
 import '../../../core/widgets/error_state.dart';
+import '../../../core/widgets/section_card.dart';
+import '../../../models/club_event.dart';
 import '../../auth/domain/auth_providers.dart';
+import '../../events/domain/event_providers.dart';
 import '../../notifications/domain/notification_providers.dart';
 import '../domain/volunteer_providers.dart';
 
+/// The Volunteer tab: the shifts you've signed up for, and the upcoming
+/// events that still need volunteers, so you can find and join one without
+/// hunting through the calendar.
 class MyCommitmentsScreen extends ConsumerWidget {
   const MyCommitmentsScreen({super.key});
 
-  Future<void> _cancel(WidgetRef ref, String eventId, String slotId, String uid) async {
-    await ref.read(volunteerRepositoryProvider).cancel(eventId, slotId, uid);
+  Future<void> _cancel(BuildContext context, WidgetRef ref, MyCommitment c, String uid) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel this shift?'),
+        content: Text('${c.event.title} · ${c.slot.label}\nYour spot will open up for someone else.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Keep')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Cancel Shift')),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
     try {
-      await ref.read(reminderServiceProvider).cancelVolunteerReminder(eventId, slotId);
+      await ref.read(volunteerRepositoryProvider).cancel(c.event.id, c.slot.id, uid);
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(e, fallback: "Couldn't cancel that shift."))));
+      return;
+    }
+    try {
+      await ref.read(reminderServiceProvider).cancelVolunteerReminder(c.event.id, c.slot.id);
     } catch (_) {
       // Best-effort — the cancellation itself already succeeded above.
     }
@@ -24,41 +51,114 @@ class MyCommitmentsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final commitmentsAsync = ref.watch(myCommitmentsProvider);
+    final eventsAsync = ref.watch(eventsProvider);
     final myUid = ref.watch(currentAppUserProvider).value?.uid;
+    final now = DateTime.now();
 
     return Scaffold(
-      appBar: AppBar(title: const Text('My Volunteering')),
+      appBar: AppBar(title: const Text('Volunteer')),
       body: commitmentsAsync.when(
         data: (commitments) {
-          if (commitments.isEmpty) {
-            return const EmptyState(
-              icon: Icons.volunteer_activism_outlined,
-              message: "You haven't signed up to volunteer for anything yet.\nCheck the Events tab for opportunities.",
-            );
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.all(12),
-            itemCount: commitments.length,
-            separatorBuilder: (context, index) => const SizedBox(height: 8),
-            itemBuilder: (context, index) {
-              final c = commitments[index];
-              return Card(
-                child: ListTile(
-                  onTap: () => context.push('/events/${c.event.id}'),
-                  title: Text(c.event.title),
-                  subtitle: Text('${c.slot.label} · ${DateFormat.MMMd().add_jm().format(c.event.startTime)}'),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.close),
-                    tooltip: 'Cancel',
-                    onPressed: myUid == null ? null : () => _cancel(ref, c.event.id, c.slot.id, myUid),
-                  ),
-                ),
-              );
-            },
+          final myEventIds = {for (final c in commitments) c.event.id};
+          final opportunities = (eventsAsync.value ?? const <ClubEvent>[])
+              .where((e) => e.needsVolunteers && e.endTime.isAfter(now) && !myEventIds.contains(e.id))
+              .sortedBy((e) => e.startTime);
+
+          return ListView(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            children: [
+              SectionCard(
+                title: 'My shifts',
+                icon: Icons.event_available_outlined,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                children: [
+                  if (commitments.isEmpty)
+                    const _EmptyRow("You haven't signed up for a shift yet. Pick one below."),
+                  for (var i = 0; i < commitments.length; i++) ...[
+                    if (i > 0) const Divider(height: 1),
+                    ListTile(
+                      onTap: () => context.push('/events/${commitments[i].event.id}'),
+                      title: Text(commitments[i].event.title),
+                      subtitle: Text(
+                        '${commitments[i].slot.label} · '
+                        '${DateFormat.MMMd().add_jm().format(commitments[i].event.startTime)}',
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.close),
+                        tooltip: 'Cancel shift',
+                        onPressed: myUid == null ? null : () => _cancel(context, ref, commitments[i], myUid),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 20),
+              SectionCard(
+                title: 'Needs volunteers',
+                icon: Icons.volunteer_activism_outlined,
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                children: [
+                  if (opportunities.isEmpty) const _EmptyRow('Nothing needs volunteers right now. Check back soon!'),
+                  for (var i = 0; i < opportunities.length; i++) ...[
+                    if (i > 0) const Divider(height: 1),
+                    _OpportunityTile(event: opportunities[i]),
+                  ],
+                ],
+              ),
+            ],
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(message: "Couldn't load your commitments.", error: err),
+        error: (err, _) => ErrorState(
+          message: "Couldn't load volunteer opportunities.",
+          error: err,
+          onRetry: () => ref.invalidate(eventsProvider),
+        ),
+      ),
+    );
+  }
+}
+
+class _OpportunityTile extends ConsumerWidget {
+  const _OpportunityTile({required this.event});
+
+  final ClubEvent event;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final progress = ref.watch(eventVolunteerProgressProvider(event.id));
+
+    return ListTile(
+      onTap: () => context.push('/events/${event.id}'),
+      title: Text(event.title),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(DateFormat.MMMEd().add_jm().format(event.startTime)),
+          if (progress != null) ...[
+            const SizedBox(height: 6),
+            CapacityBar(filled: progress.filled, capacity: progress.capacity),
+          ],
+        ],
+      ),
+      trailing: const Icon(Icons.chevron_right),
+    );
+  }
+}
+
+class _EmptyRow extends StatelessWidget {
+  const _EmptyRow(this.message);
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(20),
+      child: Text(
+        message,
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
       ),
     );
   }

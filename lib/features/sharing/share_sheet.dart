@@ -8,6 +8,7 @@ import 'package:share_plus/share_plus.dart';
 
 import 'share_content.dart';
 import 'share_flyer.dart';
+import '../../core/utils/friendly_error.dart';
 
 /// Opens the "share outside the club" sheet: a flyer preview, an editable
 /// message, and a button that hands both to the system share sheet (Messages,
@@ -98,7 +99,7 @@ class _ShareSheetState extends State<_ShareSheet> {
       );
       if (result.status == ShareResultStatus.success && mounted) navigator.pop();
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text("Couldn't open sharing: $e")));
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(e, fallback: "Couldn't open sharing. Please try again."))));
     } finally {
       if (mounted) setState(() => _sharing = false);
     }

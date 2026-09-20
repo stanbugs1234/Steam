@@ -12,6 +12,7 @@ import '../../../models/volunteer_slot.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../../volunteering/domain/volunteer_providers.dart';
 import '../domain/event_providers.dart';
+import '../../../core/utils/friendly_error.dart';
 
 /// Create/edit form for an event. Pass [eventId] to edit an existing event,
 /// or leave it null to create a new one.
@@ -205,7 +206,7 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
       }
       if (mounted) context.pop();
     } catch (e) {
-      setState(() => _error = 'Could not save event: $e');
+      setState(() => _error = friendlyError(e, fallback: "Couldn't save the event. Please try again."));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -230,11 +231,11 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
             },
             loading: () => Scaffold(appBar: AppBar(), body: const Center(child: CircularProgressIndicator())),
             error: (err, _) =>
-                Scaffold(appBar: AppBar(), body: ErrorState(message: 'Something went wrong.', error: err)),
+                Scaffold(appBar: AppBar(), body: ErrorState(message: 'Something went wrong.', error: err, onRetry: () => ref.invalidate(eventsProvider))),
           );
         },
         loading: () => Scaffold(appBar: AppBar(), body: const Center(child: CircularProgressIndicator())),
-        error: (err, _) => Scaffold(appBar: AppBar(), body: ErrorState(message: 'Something went wrong.', error: err)),
+        error: (err, _) => Scaffold(appBar: AppBar(), body: ErrorState(message: 'Something went wrong.', error: err, onRetry: () => ref.invalidate(eventsProvider))),
       );
     }
     return _buildForm(context);

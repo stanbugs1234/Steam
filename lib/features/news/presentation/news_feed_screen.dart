@@ -74,7 +74,7 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(message: "Couldn't load news right now.", error: err),
+        error: (err, _) => ErrorState(message: "Couldn't load news right now.", error: err, onRetry: () => ref.invalidate(newsFeedProvider)),
       ),
     );
   }
@@ -154,13 +154,13 @@ class _FeaturedPostCard extends ConsumerWidget {
               Positioned(
                 left: 12,
                 top: 12,
-                child: Row(
+                child: Wrap(
+                  spacing: 6,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     CategoryPill(category: post.category, onImage: true),
-                    if (post.pinned) ...[
-                      const SizedBox(width: 6),
-                      const _PinnedBadge(onImage: true),
-                    ],
+                    if (post.pinned) const _PinnedBadge(onImage: true),
                   ],
                 ),
               ),
@@ -226,13 +226,13 @@ class _PostCard extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         CategoryPill(category: post.category),
-                        if (post.pinned) ...[
-                          const SizedBox(width: 6),
-                          const _PinnedBadge(),
-                        ],
+                        if (post.pinned) const _PinnedBadge(),
                       ],
                     ),
                     const SizedBox(height: 8),

@@ -1,1 +1,58 @@
-{"firestore":{"rules":"firestore.rules","indexes":"firestore.indexes.json"},"storage":{"rules":"storage.rules"},"flutter":{"platforms":{"android":{"default":{"projectId":"steam-club-app","appId":"1:968754784411:android:5b2af43e46e87644c4fe3e","fileOutput":"android/app/google-services.json"}},"ios":{"default":{"projectId":"steam-club-app","appId":"1:968754784411:ios:67757e0a767b081ac4fe3e","uploadDebugSymbols":false,"fileOutput":"ios/Runner/GoogleService-Info.plist"}},"dart":{"lib/firebase_options.dart":{"projectId":"steam-club-app","configurations":{"android":"1:968754784411:android:5b2af43e46e87644c4fe3e","ios":"1:968754784411:ios:67757e0a767b081ac4fe3e","web":"1:968754784411:web:614daf4c540fb785c4fe3e"}}}}}}
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "steam-club-app",
+          "appId": "1:968754784411:android:8d68f3296954e2a7c4fe3e",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "ios": {
+        "default": {
+          "projectId": "steam-club-app",
+          "appId": "1:968754784411:ios:67757e0a767b081ac4fe3e",
+          "uploadDebugSymbols": false,
+          "fileOutput": "ios/Runner/GoogleService-Info.plist"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "steam-club-app",
+          "configurations": {
+            "android": "1:968754784411:android:8d68f3296954e2a7c4fe3e",
+            "ios": "1:968754784411:ios:67757e0a767b081ac4fe3e",
+            "web": "1:968754784411:web:614daf4c540fb785c4fe3e"
+          }
+        }
+      }
+    }
+  },
+  "emulators": {
+    "firestore": {
+      "port": 8080
+    },
+    "storage": {
+      "port": 9199
+    },
+    "ui": {
+      "enabled": false
+    }
+  },
+  "hosting": {
+    "public": "public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "cleanUrls": false
+  }
+}

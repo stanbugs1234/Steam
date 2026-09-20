@@ -54,12 +54,22 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
     ref.read(_directorySearchProvider.notifier).state = '';
   }
 
+  void _openFilters() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) => const _FiltersSheet(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final membersAsync = ref.watch(approvedMembersProvider);
     final query = ref.watch(_directorySearchProvider).trim().toLowerCase();
     final gradeFilter = ref.watch(_directoryGradeFilterProvider);
     final onlyNewMembers = ref.watch(_directoryNewMemberFilterProvider);
+    final activeFilters = (gradeFilter != null ? 1 : 0) + (onlyNewMembers ? 1 : 0);
 
     final resultSlivers = membersAsync.when(
       data: (members) {
@@ -127,7 +137,7 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
       error: (err, _) => <Widget>[
         SliverFillRemaining(
           hasScrollBody: false,
-          child: ErrorState(message: "Couldn't load the directory right now.", error: err),
+          child: ErrorState(message: "Couldn't load the directory right now.", error: err, onRetry: () => ref.invalidate(approvedMembersProvider)),
         ),
       ],
     );
@@ -144,54 +154,68 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
-                    child: TextField(
-                      controller: _searchCtrl,
-                      decoration: InputDecoration(
-                        prefixIcon: const Icon(Icons.search),
-                        suffixIcon: query.isNotEmpty
-                            ? IconButton(
-                                icon: const Icon(Icons.clear),
-                                tooltip: 'Clear search',
-                                onPressed: _clearSearch,
-                              )
-                            : null,
-                        hintText: 'Search by name, phone, or child\'s name',
-                        border: const OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      onChanged: _onSearchChanged,
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                    child: DropdownButtonFormField<String?>(
-                      initialValue: gradeFilter,
-                      decoration: const InputDecoration(
-                        labelText: 'Filter by grade',
-                        prefixIcon: Icon(Icons.filter_alt_outlined),
-                        border: OutlineInputBorder(),
-                        isDense: true,
-                      ),
-                      items: [
-                        const DropdownMenuItem(value: null, child: Text('All Grades')),
-                        for (final grade in kGradeOptions) DropdownMenuItem(value: grade, child: Text(grade)),
+                    padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _searchCtrl,
+                            textInputAction: TextInputAction.search,
+                            decoration: InputDecoration(
+                              prefixIcon: const Icon(Icons.search),
+                              suffixIcon: query.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear),
+                                      tooltip: 'Clear search',
+                                      onPressed: _clearSearch,
+                                    )
+                                  : null,
+                              hintText: 'Search by name, phone, or child\'s name',
+                              border: const OutlineInputBorder(),
+                              isDense: true,
+                            ),
+                            onChanged: _onSearchChanged,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton.filledTonal(
+                          tooltip: 'Filters',
+                          onPressed: _openFilters,
+                          icon: Badge(
+                            isLabelVisible: activeFilters > 0,
+                            label: Text('$activeFilters'),
+                            child: const Icon(Icons.tune),
+                          ),
+                        ),
                       ],
-                      onChanged: (value) => ref.read(_directoryGradeFilterProvider.notifier).state = value,
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: FilterChip(
-                        avatar: const Icon(Icons.auto_awesome, size: 18),
-                        label: const Text('New members only'),
-                        selected: onlyNewMembers,
-                        onSelected: (value) => ref.read(_directoryNewMemberFilterProvider.notifier).state = value,
+                  if (activeFilters > 0)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: [
+                            if (gradeFilter != null)
+                              InputChip(
+                                label: Text(gradeFilter),
+                                onDeleted: () => ref.read(_directoryGradeFilterProvider.notifier).state = null,
+                                deleteButtonTooltipMessage: 'Remove grade filter',
+                              ),
+                            if (onlyNewMembers)
+                              InputChip(
+                                avatar: const Icon(Icons.auto_awesome, size: 18),
+                                label: const Text('New members'),
+                                onDeleted: () => ref.read(_directoryNewMemberFilterProvider.notifier).state = false,
+                                deleteButtonTooltipMessage: 'Remove new members filter',
+                              ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -261,6 +285,67 @@ class _MemberTile extends ConsumerWidget {
             : null,
         trailing: const Icon(Icons.chevron_right),
         onTap: () => context.push('/directory/${member.uid}'),
+      ),
+    );
+  }
+}
+
+/// Grade and "new members" filters, applied live to the directory behind it.
+class _FiltersSheet extends ConsumerWidget {
+  const _FiltersSheet();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final gradeFilter = ref.watch(_directoryGradeFilterProvider);
+    final onlyNewMembers = ref.watch(_directoryNewMemberFilterProvider);
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(24, 0, 24, 16 + MediaQuery.viewInsetsOf(context).bottom),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Filter members', style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String?>(
+              initialValue: gradeFilter,
+              decoration: const InputDecoration(labelText: 'Has a child in grade', prefixIcon: Icon(Icons.school_outlined)),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('Any grade')),
+                for (final grade in kGradeOptions) DropdownMenuItem(value: grade, child: Text(grade)),
+              ],
+              onChanged: (value) => ref.read(_directoryGradeFilterProvider.notifier).state = value,
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.auto_awesome),
+              title: const Text('New members only'),
+              value: onlyNewMembers,
+              onChanged: (value) => ref.read(_directoryNewMemberFilterProvider.notifier).state = value,
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: gradeFilter == null && !onlyNewMembers
+                        ? null
+                        : () {
+                            ref.read(_directoryGradeFilterProvider.notifier).state = null;
+                            ref.read(_directoryNewMemberFilterProvider.notifier).state = false;
+                          },
+                    child: const Text('Clear all'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Done')),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }

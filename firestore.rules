@@ -46,6 +46,47 @@ service cloud.firestore {
         )
       );
 
+      // Every field a user doc may ever contain. New docs can't carry anything
+      // else.
+      function hasOnlyKnownUserFields() {
+        return request.resource.data.keys().hasOnly([
+          'name', 'email', 'phone', 'kids', 'photoUrl', 'role', 'status', 'createdAt',
+          'mergedFromId', 'remindersEnabled', 'duesPaid', 'isNewMember', 'memberNumber',
+          'clubPoints', 'yearlyPoints'
+        ]);
+      }
+
+      // The unclaimed roster placeholder a merging signup says it is claiming.
+      function claimedPlaceholder() {
+        return get(/databases/$(database)/documents/users/$(request.resource.data.mergedFromId)).data;
+      }
+
+      // Points, dues, member number and badges are maintained by the club, not
+      // by the person signing up: a fresh signup can't carry any of them...
+      function hasNoClubFields() {
+        let d = request.resource.data;
+        return d.get('yearlyPoints', null) == null
+          && d.get('clubPoints', null) == null
+          && d.get('memberNumber', null) == null
+          && d.get('duesPaid', false) == false
+          && d.get('isNewMember', false) == false
+          && d.get('mergedFromId', null) == null
+          && d.createdAt == request.time;
+      }
+
+      // ...and a merge may carry over only what the roster already recorded
+      // for that placeholder (omitting a field is fine; inflating one isn't).
+      function claimsOnlyRosterValues() {
+        let d = request.resource.data;
+        let ph = claimedPlaceholder();
+        return (d.get('yearlyPoints', null) == null || d.yearlyPoints == ph.get('yearlyPoints', null))
+          && (d.get('clubPoints', null) == null || d.clubPoints == ph.get('clubPoints', null))
+          && (d.get('memberNumber', null) == null || d.memberNumber == ph.get('memberNumber', null))
+          && (d.get('duesPaid', false) == false || d.duesPaid == ph.get('duesPaid', false))
+          && (d.get('isNewMember', false) == false || d.isNewMember == ph.get('isNewMember', false))
+          && (d.createdAt == request.time || d.createdAt == ph.get('createdAt', null));
+      }
+
       // Self-signup always starts as a pending member; role/status can't be
       // set by the person creating the account. Exception: a phone-verified
       // user may create their own doc pre-approved if it explicitly claims a
@@ -54,16 +95,20 @@ service cloud.firestore {
       // to 'member', so merging can never grant admin.
       allow create: if isSignedIn()
         && request.auth.uid == uid
+        && hasOnlyKnownUserFields()
         && (
-          (request.resource.data.role == 'member' && request.resource.data.status == 'pending')
+          (request.resource.data.role == 'member'
+            && request.resource.data.status == 'pending'
+            && hasNoClubFields())
           || (
             request.auth.token.phone_number != null
             && request.resource.data.role == 'member'
             && request.resource.data.status == 'approved'
             && request.resource.data.mergedFromId is string
             && request.resource.data.mergedFromId.matches('imported_.*')
-            && get(/databases/$(database)/documents/users/$(request.resource.data.mergedFromId)).data.phone == request.auth.token.phone_number
-            && get(/databases/$(database)/documents/users/$(request.resource.data.mergedFromId)).data.status == 'approved'
+            && claimedPlaceholder().phone == request.auth.token.phone_number
+            && claimedPlaceholder().status == 'approved'
+            && claimsOnlyRosterValues()
           )
           || (
             request.auth.token.email != null
@@ -71,8 +116,9 @@ service cloud.firestore {
             && request.resource.data.status == 'approved'
             && request.resource.data.mergedFromId is string
             && request.resource.data.mergedFromId.matches('imported_.*')
-            && get(/databases/$(database)/documents/users/$(request.resource.data.mergedFromId)).data.email == request.auth.token.email
-            && get(/databases/$(database)/documents/users/$(request.resource.data.mergedFromId)).data.status == 'approved'
+            && claimedPlaceholder().email == request.auth.token.email
+            && claimedPlaceholder().status == 'approved'
+            && claimsOnlyRosterValues()
           )
         );
 
@@ -111,8 +157,23 @@ service cloud.firestore {
       // permitted here — that's what makes a scanned code a one-time award.
       match /attendance/{eventId} {
         allow read: if isSignedIn() && (request.auth.uid == uid || isAdmin());
-        allow create: if isSignedIn() && request.auth.uid == uid
-          && get(/databases/$(database)/documents/events/$(eventId)).data.checkInEnabled == true;
+        // The record must say exactly what the event says, be worth exactly one
+        // point, and be written while check-in is actually open — otherwise a
+        // member could write themselves any number of points directly.
+        function isValidCheckIn() {
+          let ev = get(/databases/$(database)/documents/events/$(eventId)).data;
+          let d = request.resource.data;
+          return ev.checkInEnabled == true
+            && d.keys().hasOnly(['eventTitle', 'eventStartTime', 'points', 'checkedInAt'])
+            && d.points == 1
+            && d.eventTitle == ev.title
+            && d.eventStartTime == ev.startTime
+            && d.checkedInAt == request.time
+            && request.time > ev.startTime - duration.value(30, 'm')
+            && request.time < ev.endTime + duration.value(2, 'h');
+        }
+
+        allow create: if isSignedIn() && request.auth.uid == uid && isValidCheckIn();
         allow update, delete: if isAdmin();
       }
     }

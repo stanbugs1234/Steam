@@ -1,14 +1,33 @@
+import 'dart:ui';
+
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'app/app.dart';
 import 'firebase_options.dart';
 
+/// Sends uncaught errors to Crashlytics (release builds only) so problems
+/// members hit in the field show up instead of vanishing.
+Future<void> _setUpErrorReporting() async {
+  if (kIsWeb) return; // Crashlytics doesn't support web.
+  await FirebaseCrashlytics.instance.setCrashlyticsCollectionEnabled(!kDebugMode);
+  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await _setUpErrorReporting();
+  // The app is designed for portrait phones.
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
   // In release builds Flutter's default ErrorWidget renders as an empty box
   // with no message, which on a full-screen build failure just looks like a

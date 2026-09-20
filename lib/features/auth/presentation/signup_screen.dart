@@ -11,6 +11,9 @@ import '../../../models/app_user.dart';
 import '../../../models/child_info.dart';
 import '../data/user_repository.dart';
 import '../domain/auth_providers.dart';
+import '../../../core/utils/friendly_error.dart';
+import '../../../core/widgets/legal_links.dart';
+import '../../../core/widgets/password_field.dart';
 
 enum _SignupMode { email, phone }
 
@@ -126,6 +129,13 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         // Preserve the placeholder's original join date on merge — otherwise
         // toFirestore() would stamp today's date and lose their real tenure.
         createdAt: placeholder?.createdAt,
+        // ...and the roster's own records, which would otherwise vanish along
+        // with the placeholder we delete right after.
+        memberNumber: placeholder?.memberNumber,
+        clubPoints: placeholder?.clubPoints,
+        yearlyPoints: placeholder?.yearlyPoints,
+        duesPaid: placeholder?.duesPaid ?? false,
+        isNewMember: placeholder?.isNewMember ?? false,
       ));
 
       if (placeholder != null) {
@@ -139,7 +149,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       // Router redirect will move to /pending-approval (or straight to
       // /home if merged as approved) automatically.
     } on FirebaseAuthException catch (e) {
-      setState(() => _errorText = e.message ?? 'Could not create account.');
+      setState(() => _errorText = friendlyError(e, fallback: 'Could not create your account. Please try again.'));
     } catch (e) {
       setState(() => _errorText = 'Something went wrong. Please try again.');
     } finally {
@@ -162,7 +172,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
       case 'web-context-cancelled':
         return 'Verification was cancelled. Please try again.';
       default:
-        return 'Something went wrong. Please try again.';
+        return friendlyError(e);
     }
   }
 
@@ -235,6 +245,13 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         // Preserve the placeholder's original join date on merge — otherwise
         // toFirestore() would stamp today's date and lose their real tenure.
         createdAt: placeholder?.createdAt,
+        // ...and the roster's own records, which would otherwise vanish along
+        // with the placeholder we delete right after.
+        memberNumber: placeholder?.memberNumber,
+        clubPoints: placeholder?.clubPoints,
+        yearlyPoints: placeholder?.yearlyPoints,
+        duesPaid: placeholder?.duesPaid ?? false,
+        isNewMember: placeholder?.isNewMember ?? false,
       );
 
       await userRepo.createProfile(merged);
@@ -372,6 +389,8 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           TextFormField(
             controller: _nameCtrl,
             textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+            autofillHints: const [AutofillHints.name],
             decoration: const InputDecoration(labelText: 'Your full name'),
             validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
           ),
@@ -379,6 +398,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           TextFormField(
             controller: _emailCtrl,
             keyboardType: TextInputType.emailAddress,
+            textInputAction: TextInputAction.next,
+            autocorrect: false,
+            autofillHints: const [AutofillHints.email],
             decoration: const InputDecoration(labelText: 'Email'),
             validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
           ),
@@ -392,17 +414,18 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
           const SizedBox(height: 12),
           ChildrenFormField(initialChildren: _kids, onChanged: (kids) => _kids = kids),
           const SizedBox(height: 12),
-          TextFormField(
+          PasswordField(
             controller: _passwordCtrl,
-            obscureText: true,
-            decoration: const InputDecoration(labelText: 'Password'),
+            isNewPassword: true,
+            textInputAction: TextInputAction.next,
             validator: (v) => (v == null || v.length < 6) ? 'At least 6 characters' : null,
           ),
           const SizedBox(height: 12),
-          TextFormField(
+          PasswordField(
             controller: _confirmCtrl,
-            obscureText: true,
-            decoration: const InputDecoration(labelText: 'Confirm password'),
+            label: 'Confirm password',
+            isNewPassword: true,
+            textInputAction: TextInputAction.done,
             validator: (v) => (v != _passwordCtrl.text) ? 'Passwords do not match' : null,
           ),
           if (_errorText != null) ...[
@@ -568,7 +591,7 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   Center(child: Image.asset('assets/icon/icon.png', height: 72)),
                   const SizedBox(height: 12),
                   Text(
-                    isRegistering ? 'Join the Steam Club' : 'Sign in with your phone number',
+                    isRegistering ? 'Join STEAM Club' : 'Sign in with your phone number',
                     style: Theme.of(context).textTheme.headlineSmall,
                   ),
                   const SizedBox(height: 4),
@@ -595,6 +618,12 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                   TextButton(
                     onPressed: () => context.go('/login'),
                     child: const Text('Already have an account? Sign in'),
+                  ),
+                  const SizedBox(height: 12),
+                  LegalLinks(
+                    prefix: isRegistering
+                        ? 'By requesting an account, you agree to the'
+                        : 'By continuing, you agree to the',
                   ),
                 ],
               ),

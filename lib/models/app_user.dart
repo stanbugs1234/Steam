@@ -113,17 +113,23 @@ class AppUser {
 
   AppUser copyWith({
     String? name,
+    String? email,
     String? phone,
     List<ChildInfo>? kids,
     String? photoUrl,
     UserRole? role,
     UserStatus? status,
     bool? remindersEnabled,
+    bool? duesPaid,
+    bool? isNewMember,
+    String? memberNumber,
+    int? clubPoints,
+    int? yearlyPoints,
   }) {
     return AppUser(
       uid: uid,
       name: name ?? this.name,
-      email: email,
+      email: email ?? this.email,
       phone: phone ?? this.phone,
       kids: kids ?? this.kids,
       photoUrl: photoUrl ?? this.photoUrl,
@@ -132,6 +138,11 @@ class AppUser {
       createdAt: createdAt,
       mergedFromId: mergedFromId,
       remindersEnabled: remindersEnabled ?? this.remindersEnabled,
+      duesPaid: duesPaid ?? this.duesPaid,
+      isNewMember: isNewMember ?? this.isNewMember,
+      memberNumber: memberNumber ?? this.memberNumber,
+      clubPoints: clubPoints ?? this.clubPoints,
+      yearlyPoints: yearlyPoints ?? this.yearlyPoints,
     );
   }
 }

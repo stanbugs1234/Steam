@@ -8,6 +8,7 @@ import '../../../core/widgets/error_state.dart';
 import '../../../models/volunteer_slot.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../domain/volunteer_providers.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 
 class VolunteerSlotsAdminScreen extends ConsumerWidget {
   const VolunteerSlotsAdminScreen({super.key, required this.eventId});
@@ -75,20 +76,16 @@ class VolunteerSlotsAdminScreen extends ConsumerWidget {
   }
 
   Future<void> _confirmDelete(BuildContext context, WidgetRef ref, VolunteerSlot slot) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete this slot?'),
-        content: Text(slot.signedUpUserIds.isEmpty
-            ? 'This cannot be undone.'
-            : '${slot.signedUpUserIds.length} member(s) are signed up. This cannot be undone.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
-        ],
-      ),
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Delete this slot?',
+      message: slot.signedUpUserIds.isEmpty
+          ? 'This cannot be undone.'
+          : '${slot.signedUpUserIds.length} member(s) are signed up. This cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
     );
-    if (confirmed == true) {
+    if (confirmed) {
       await ref.read(volunteerRepositoryProvider).deleteSlot(eventId, slot.id);
     }
   }
@@ -133,10 +130,12 @@ class VolunteerSlotsAdminScreen extends ConsumerWidget {
                           ),
                           IconButton(
                             icon: const Icon(Icons.edit_outlined),
+                            tooltip: 'Edit slot',
                             onPressed: () => _showSlotDialog(context, ref, existing: slot),
                           ),
                           IconButton(
                             icon: const Icon(Icons.delete_outline),
+                            tooltip: 'Delete slot',
                             onPressed: () => _confirmDelete(context, ref, slot),
                           ),
                         ],

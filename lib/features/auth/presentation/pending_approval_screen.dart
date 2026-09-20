@@ -1,46 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../domain/auth_providers.dart';
+import 'account_status_view.dart';
 
-class PendingApprovalScreen extends ConsumerWidget {
+class PendingApprovalScreen extends StatelessWidget {
   const PendingApprovalScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.hourglass_top, size: 56),
-                const SizedBox(height: 16),
-                Text(
-                  "You're almost in!",
-                  style: Theme.of(context).textTheme.headlineSmall,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "A STEAM Club admin just needs to approve your request before you can "
-                  "see the member directory, news, and events. This page will "
-                  "update automatically as soon as you're in.",
-                  style: Theme.of(context).textTheme.bodyMedium,
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                OutlinedButton(
-                  onPressed: () => ref.read(authRepositoryProvider).signOut(),
-                  child: const Text('Sign out'),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+  Widget build(BuildContext context) {
+    return const AccountStatusView(
+      icon: Icons.hourglass_top,
+      title: "You're almost in!",
+      message: 'A STEAM Club admin needs to approve your request before you can see the member directory, '
+          'news, and events. This page updates automatically as soon as you\'re in, so you can close the app '
+          'and come back later.',
     );
   }
 }

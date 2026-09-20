@@ -13,6 +13,7 @@ import '../../auth/domain/auth_providers.dart';
 import '../../events/domain/event_providers.dart';
 import '../domain/news_providers.dart';
 import 'news_widgets.dart';
+import '../../../core/utils/friendly_error.dart';
 
 /// Create/edit form for a news post. Pass [postId] to edit an existing post,
 /// or leave it null to create a new one.
@@ -77,10 +78,10 @@ class _NewsEditorScreenState extends ConsumerState<NewsEditorScreen> {
   }
 
   void _removeImage() => setState(() {
-        _pickedImage = null;
-        _pickedBytes = null;
-        _imageUrl = null;
-      });
+    _pickedImage = null;
+    _pickedBytes = null;
+    _imageUrl = null;
+  });
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
@@ -106,22 +107,26 @@ class _NewsEditorScreenState extends ConsumerState<NewsEditorScreen> {
         });
       } else {
         final me = ref.read(currentAppUserProvider).value;
-        await ref.read(newsRepositoryProvider).createPost(NewsPost(
-              id: id,
-              title: _titleCtrl.text.trim(),
-              body: _bodyCtrl.text.trim(),
-              authorId: me?.uid ?? '',
-              authorName: me?.name ?? '',
-              imageUrl: imageUrl,
-              category: _category,
-              pinned: _pinned,
-              eventId: _eventId,
-            ));
+        await ref
+            .read(newsRepositoryProvider)
+            .createPost(
+              NewsPost(
+                id: id,
+                title: _titleCtrl.text.trim(),
+                body: _bodyCtrl.text.trim(),
+                authorId: me?.uid ?? '',
+                authorName: me?.name ?? '',
+                imageUrl: imageUrl,
+                category: _category,
+                pinned: _pinned,
+                eventId: _eventId,
+              ),
+            );
       }
 
       if (mounted) context.pop();
     } catch (e) {
-      setState(() => _error = 'Could not save post: $e');
+      setState(() => _error = friendlyError(e, fallback: "Couldn't save the post. Please try again."));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -135,13 +140,26 @@ class _NewsEditorScreenState extends ConsumerState<NewsEditorScreen> {
         data: (posts) {
           final post = posts.firstWhereOrNull((p) => p.id == widget.postId);
           if (post == null) {
-            return Scaffold(appBar: AppBar(), body: const Center(child: Text('Post not found.')));
+            return Scaffold(
+              appBar: AppBar(),
+              body: const Center(child: Text('Post not found.')),
+            );
           }
           _syncFromExisting(post);
           return _buildForm(context);
         },
-        loading: () => Scaffold(appBar: AppBar(), body: const Center(child: CircularProgressIndicator())),
-        error: (err, _) => Scaffold(appBar: AppBar(), body: ErrorState(message: 'Something went wrong.', error: err)),
+        loading: () => Scaffold(
+          appBar: AppBar(),
+          body: const Center(child: CircularProgressIndicator()),
+        ),
+        error: (err, _) => Scaffold(
+          appBar: AppBar(),
+          body: ErrorState(
+            message: 'Something went wrong.',
+            error: err,
+            onRetry: () => ref.invalidate(newsFeedProvider),
+          ),
+        ),
       );
     }
     return _buildForm(context);
@@ -193,21 +211,25 @@ class _NewsEditorScreenState extends ConsumerState<NewsEditorScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  GestureDetector(
-                    onTap: _pickImage,
-                    child: AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: Container(
-                        clipBehavior: Clip.antiAlias,
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                          borderRadius: BorderRadius.circular(8),
+                  Semantics(
+                    button: true,
+                    label: 'Choose a photo',
+                    child: GestureDetector(
+                      onTap: _pickImage,
+                      child: AspectRatio(
+                        aspectRatio: 16 / 9,
+                        child: Container(
+                          clipBehavior: Clip.antiAlias,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: _pickedBytes != null
+                              ? Image.memory(_pickedBytes!, fit: BoxFit.cover, width: double.infinity)
+                              : (_imageUrl != null
+                                    ? NewsImage(url: _imageUrl!)
+                                    : const Center(child: Icon(Icons.add_photo_alternate_outlined, size: 40))),
                         ),
-                        child: _pickedBytes != null
-                            ? Image.memory(_pickedBytes!, fit: BoxFit.cover, width: double.infinity)
-                            : (_imageUrl != null
-                                ? NewsImage(url: _imageUrl!)
-                                : const Center(child: Icon(Icons.add_photo_alternate_outlined, size: 40))),
                       ),
                     ),
                   ),

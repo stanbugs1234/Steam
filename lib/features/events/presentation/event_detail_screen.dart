@@ -13,6 +13,7 @@ import '../../sharing/share_content.dart';
 import '../../sharing/share_sheet.dart';
 import '../../volunteering/presentation/volunteer_slot_section.dart';
 import '../domain/event_providers.dart';
+import '../../../core/widgets/confirm_dialog.dart';
 
 /// Whether check-in can be started/shown right now — anyone can start
 /// check-in for an event, but only within a window around its own time, so
@@ -75,23 +76,21 @@ class EventDetailScreen extends ConsumerWidget {
                   if (isAdmin) ...[
                     IconButton(
                       icon: const Icon(Icons.edit_outlined),
+                      tooltip: 'Edit event',
                       onPressed: () => context.push('/events/${event.id}/edit'),
                     ),
                     IconButton(
                       icon: const Icon(Icons.delete_outline),
+                      tooltip: 'Delete event',
                       onPressed: () async {
-                        final confirmed = await showDialog<bool>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Delete event?'),
-                            content: const Text('This cannot be undone.'),
-                            actions: [
-                              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-                              TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
-                            ],
-                          ),
+                        final confirmed = await showConfirmDialog(
+                          context,
+                          title: 'Delete event?',
+                          message: 'This cannot be undone.',
+                          confirmLabel: 'Delete',
+                          destructive: true,
                         );
-                        if (confirmed == true) {
+                        if (confirmed) {
                           await ref.read(eventRepositoryProvider).deleteEvent(event.id);
                           if (context.mounted) context.pop();
                         }
@@ -178,7 +177,7 @@ class EventDetailScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(message: "Couldn't load this event.", error: err),
+        error: (err, _) => ErrorState(message: "Couldn't load this event.", error: err, onRetry: () => ref.invalidate(eventsProvider)),
       ),
     );
   }

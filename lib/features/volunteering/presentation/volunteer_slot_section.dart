@@ -10,6 +10,7 @@ import '../../auth/domain/auth_providers.dart';
 import '../../notifications/domain/notification_providers.dart';
 import '../data/volunteer_repository.dart';
 import '../domain/volunteer_providers.dart';
+import '../../../core/utils/friendly_error.dart';
 
 /// Shown on an event's detail screen: lets members sign up/cancel for
 /// volunteer slots, and gives admins a shortcut to manage the slots.
@@ -138,7 +139,7 @@ class _SlotTileState extends ConsumerState<_SlotTile> {
     } on SlotFullException {
       setState(() => _error = 'This slot just filled up.');
     } catch (e) {
-      setState(() => _error = 'Something went wrong: $e');
+      setState(() => _error = friendlyError(e));
     } finally {
       if (mounted) setState(() => _working = false);
     }

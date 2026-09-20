@@ -35,7 +35,7 @@ class ApprovalQueueScreen extends ConsumerWidget {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(message: "Couldn't load pending requests.", error: err),
+        error: (err, _) => ErrorState(message: "Couldn't load pending requests.", error: err, onRetry: () => ref.invalidate(pendingUsersProvider)),
       ),
     );
   }

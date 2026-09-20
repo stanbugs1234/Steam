@@ -3,12 +3,14 @@ import 'dart:io' show Platform;
 import 'package:collection/collection.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/utils/avatar_image.dart';
+import '../../../core/utils/friendly_error.dart';
 import '../../../core/utils/membership_duration.dart';
 import '../../../core/utils/phone_format.dart';
 import '../../../core/widgets/admin_badge.dart';
@@ -55,7 +57,7 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open Contacts: $e')),
+          SnackBar(content: Text(friendlyError(e, fallback: "Couldn't open Contacts."))),
         );
       }
     }
@@ -85,7 +87,7 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not update admin access: $e')),
+          SnackBar(content: Text(friendlyError(e, fallback: "Couldn't update admin access."))),
         );
       }
     } finally {
@@ -108,7 +110,7 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not update join date: $e')),
+          SnackBar(content: Text(friendlyError(e, fallback: "Couldn't update the join date."))),
         );
       }
     } finally {
@@ -123,7 +125,7 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not update dues status: $e')),
+          SnackBar(content: Text(friendlyError(e, fallback: "Couldn't update dues status."))),
         );
       }
     } finally {
@@ -138,11 +140,51 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not update new member status: $e')),
+          SnackBar(content: Text(friendlyError(e, fallback: "Couldn't update new member status."))),
         );
       }
     } finally {
       if (mounted) setState(() => _settingNewMember = false);
+    }
+  }
+
+  /// Asks an admin for a new value for one of a member's roster records
+  /// (member number, points) and saves it. Clearing the box clears the value.
+  Future<void> _editRosterField({
+    required String title,
+    required String? current,
+    required bool numeric,
+    required Future<void> Function(String? value) save,
+  }) async {
+    final controller = TextEditingController(text: current ?? '');
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          keyboardType: numeric ? TextInputType.number : TextInputType.text,
+          inputFormatters: numeric ? [FilteringTextInputFormatter.digitsOnly] : null,
+          decoration: const InputDecoration(helperText: 'Leave empty to clear'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Save')),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (result == null || !mounted) return;
+
+    try {
+      await save(result.isEmpty ? null : result);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Couldn't update ${title.toLowerCase()}. Please try again.")),
+        );
+      }
     }
   }
 
@@ -348,6 +390,44 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
                       value: member.isNewMember,
                       onChanged: _settingNewMember ? null : (value) => _setIsNewMember(member, value),
                     ),
+                    const Divider(height: 1),
+                    ListTile(
+                      title: const Text('Member #'),
+                      subtitle: Text(member.memberNumber ?? 'Not set'),
+                      trailing: const Icon(Icons.edit_outlined),
+                      onTap: () => _editRosterField(
+                        title: 'Member #',
+                        current: member.memberNumber,
+                        numeric: false,
+                        save: (v) => ref.read(userRepositoryProvider).setMemberNumber(member.uid, v),
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      title: const Text('Roster points'),
+                      subtitle: Text(
+                        '${member.yearlyPoints ?? 0} — counts toward the member\'s point total on Home and Profile',
+                      ),
+                      trailing: const Icon(Icons.edit_outlined),
+                      onTap: () => _editRosterField(
+                        title: 'Roster points',
+                        current: member.yearlyPoints?.toString(),
+                        numeric: true,
+                        save: (v) => ref.read(userRepositoryProvider).setYearlyPoints(member.uid, v == null ? null : int.parse(v)),
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      title: const Text('Club points'),
+                      subtitle: Text('${member.clubPoints ?? 0} — cumulative, shown under Membership'),
+                      trailing: const Icon(Icons.edit_outlined),
+                      onTap: () => _editRosterField(
+                        title: 'Club points',
+                        current: member.clubPoints?.toString(),
+                        numeric: true,
+                        save: (v) => ref.read(userRepositoryProvider).setClubPoints(member.uid, v == null ? null : int.parse(v)),
+                      ),
+                    ),
                   ],
                 ),
               ],
@@ -355,7 +435,7 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, _) => ErrorState(message: "Couldn't load this member.", error: err),
+        error: (err, _) => ErrorState(message: "Couldn't load this member.", error: err, onRetry: () => ref.invalidate(approvedMembersProvider)),
       ),
     );
   }
