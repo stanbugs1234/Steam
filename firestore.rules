@@ -76,20 +76,25 @@ service cloud.firestore {
           )
         );
 
-      // Members may edit their own contact info but not their role/status.
-      // Admins may edit anything (used to approve/deny and promote members).
+      // Members may edit only their own profile fields — never role/status
+      // or anything the club maintains (points, dues, member number, join
+      // date, badges). Admins may edit anything (used to approve/deny,
+      // promote members, and record dues/points).
       allow update: if isSignedIn() && (
         (request.auth.uid == uid
           && request.resource.data.role == resource.data.role
-          && request.resource.data.status == resource.data.status)
+          && request.resource.data.status == resource.data.status
+          && request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['name', 'phone', 'kids', 'photoUrl', 'remindersEnabled']))
         || isAdmin()
       );
 
-      // Admins can delete anyone. A phone- or email-verified user may also
+      // Admins can delete anyone, and a member can delete their own account
+      // (in-app account deletion). A phone- or email-verified user may also
       // delete the specific import placeholder they just claimed by
       // matching phone/email, cleaning up the duplicate once merged into
       // their real account.
-      allow delete: if isAdmin() || (
+      allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == uid) || (
         uid.matches('imported_.*')
         && isSignedIn()
         && request.auth.token.phone_number != null

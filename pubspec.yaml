@@ -54,6 +54,7 @@ dependencies:
   qr_flutter: ^4.1.0
   mobile_scanner: ^7.1.2
   share_plus: ^13.3.0
+  package_info_plus: ^10.2.1
 
 dev_dependencies:
   flutter_test:

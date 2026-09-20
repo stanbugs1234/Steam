@@ -5,12 +5,10 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/utils/avatar_image.dart';
-import '../../../core/widgets/admin_badge.dart';
 import '../../../core/widgets/capacity_bar.dart';
-import '../../../core/widgets/dues_paid_badge.dart';
-import '../../../core/widgets/new_member_badge.dart';
+import '../../../core/widgets/member_badges.dart';
 import '../../../core/widgets/section_card.dart';
-import '../../../core/widgets/top_volunteer_badge.dart';
+import '../../../core/widgets/stat_tile.dart';
 import '../../../models/app_user.dart';
 import '../../admin/presentation/pending_user_tile.dart';
 import '../../attendance/domain/attendance_providers.dart';
@@ -104,7 +102,7 @@ class HomeDashboardScreen extends ConsumerWidget {
                   Row(
                     children: [
                       Expanded(
-                        child: _HomeStatTile(
+                        child: StatTile(
                           icon: Icons.star_outline,
                           value: '$totalPoints',
                           label: totalPoints == 1 ? 'Point' : 'Points',
@@ -114,7 +112,7 @@ class HomeDashboardScreen extends ConsumerWidget {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _HomeStatTile(
+                        child: StatTile(
                           icon: appUser.duesPaid ? Icons.check_circle_outline : Icons.cancel_outlined,
                           value: appUser.duesPaid ? 'Paid' : 'Not Paid',
                           label: 'Dues',
@@ -124,7 +122,7 @@ class HomeDashboardScreen extends ConsumerWidget {
                       ),
                       const SizedBox(width: 12),
                       Expanded(
-                        child: _HomeStatTile(
+                        child: StatTile(
                           icon: Icons.calendar_today_outlined,
                           value: appUser.createdAt != null ? DateFormat('y').format(appUser.createdAt!) : '—',
                           label: 'Member since',
@@ -404,80 +402,14 @@ class _HomeHeader extends StatelessWidget {
                       .headlineSmall
                       ?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.onPrimaryContainer),
                 ),
-                if (appUser.isAdmin || isTopVolunteer || appUser.isNewMember || appUser.duesPaid) ...[
+                if (MemberBadges.hasAny(appUser, isTopVolunteer)) ...[
                   const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: [
-                      if (appUser.isAdmin) const AdminBadge(),
-                      if (isTopVolunteer) const TopVolunteerBadge(),
-                      if (appUser.isNewMember) const NewMemberBadge(),
-                      if (appUser.duesPaid) const DuesPaidBadge(),
-                    ],
-                  ),
+                  MemberBadges(user: appUser, isTopVolunteer: isTopVolunteer),
                 ],
               ],
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _HomeStatTile extends StatelessWidget {
-  const _HomeStatTile({
-    required this.icon,
-    required this.value,
-    required this.label,
-    required this.onTap,
-    this.valueColor,
-    this.showChevron = false,
-  });
-
-  final IconData icon;
-  final String value;
-  final String label;
-  final Color? valueColor;
-  final VoidCallback onTap;
-
-  /// Hints that tapping opens more detail (used for Points).
-  final bool showChevron;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final labelStyle = Theme.of(context).textTheme.labelSmall?.copyWith(color: colorScheme.onSurfaceVariant);
-    return Card(
-      margin: EdgeInsets.zero,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-          child: Column(
-            children: [
-              Icon(icon, color: valueColor ?? colorScheme.primary, size: 20),
-              const SizedBox(height: 6),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: valueColor,
-                    ),
-              ),
-              const SizedBox(height: 2),
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(label, style: labelStyle),
-                  if (showChevron) Icon(Icons.chevron_right, size: 14, color: colorScheme.onSurfaceVariant),
-                ],
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }

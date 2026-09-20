@@ -12,6 +12,7 @@ import '../features/auth/presentation/forgot_password_screen.dart';
 import '../features/auth/presentation/login_screen.dart';
 import '../features/auth/presentation/pending_approval_screen.dart';
 import '../features/auth/presentation/signup_screen.dart';
+import '../features/directory/presentation/edit_profile_screen.dart';
 import '../features/directory/presentation/member_detail_screen.dart';
 import '../features/events/presentation/event_detail_screen.dart';
 import '../features/events/presentation/event_editor_screen.dart';
@@ -112,6 +113,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(path: '/checkin', builder: (context, state) => const CheckInScannerScreen()),
       GoRoute(path: '/my-points', builder: (context, state) => const MyPointsScreen()),
+      // Not '/profile/edit': the admin-only guard above rejects any path ending in '/edit'.
+      GoRoute(path: '/edit-profile', builder: (context, state) => const EditProfileScreen()),
       GoRoute(path: '/admin/approvals', builder: (context, state) => const ApprovalQueueScreen()),
       GoRoute(path: '/leaderboard', builder: (context, state) => const VolunteerLeaderboardScreen()),
     ],

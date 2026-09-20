@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/utils/avatar_image.dart';
+import '../../../core/utils/membership_duration.dart';
 import '../../../core/utils/phone_format.dart';
 import '../../../core/widgets/admin_badge.dart';
 import '../../../core/widgets/dues_paid_badge.dart';
@@ -243,7 +244,7 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
                     _InfoRow(
                       icon: Icons.hourglass_bottom_outlined,
                       label: 'Membership length',
-                      value: _formatMembershipDuration(member.createdAt!),
+                      value: formatMembershipDuration(member.createdAt!),
                     ),
                     if (member.memberNumber != null) ...[
                       const Divider(height: 1),
@@ -358,19 +359,6 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
       ),
     );
   }
-}
-
-String _formatMembershipDuration(DateTime since) {
-  final now = DateTime.now();
-  var months = (now.year - since.year) * 12 + (now.month - since.month);
-  if (now.day < since.day) months -= 1;
-  if (months < 1) return 'New member';
-
-  final years = months ~/ 12;
-  final remainingMonths = months % 12;
-  if (years == 0) return '$remainingMonths month${remainingMonths == 1 ? '' : 's'}';
-  if (remainingMonths == 0) return '$years year${years == 1 ? '' : 's'}';
-  return '$years year${years == 1 ? '' : 's'} $remainingMonths month${remainingMonths == 1 ? '' : 's'}';
 }
 
 class _InfoRow extends StatelessWidget {

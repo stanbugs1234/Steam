@@ -170,7 +170,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     for (var i = 0; i < dots; i++)
-                      _LegendDot(color: i < mine ? colorScheme.tertiary : colorScheme.primary, margin: 1),
+                      _LegendDot(color: i < mine ? _volunteeringRed : colorScheme.primary, margin: 1),
                   ],
                 );
               },
@@ -194,7 +194,7 @@ class _EventsScreenState extends ConsumerState<EventsScreen> with SingleTickerPr
               const SizedBox(width: 4),
               Text('Event', style: Theme.of(context).textTheme.labelSmall),
               const SizedBox(width: 12),
-              _LegendDot(color: colorScheme.tertiary),
+              const _LegendDot(color: _volunteeringRed),
               const SizedBox(width: 4),
               Text("You're volunteering", style: Theme.of(context).textTheme.labelSmall),
             ],
@@ -322,21 +322,24 @@ class _EventTile extends ConsumerWidget {
   }
 }
 
+const _volunteeringRed = Color(0xFFD32F2F);
+
 class _SignedUpChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
+    const background = Color(0xFFFFCDD2);
+    const foreground = Color(0xFFB71C1C);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(color: colorScheme.tertiaryContainer, borderRadius: BorderRadius.circular(12)),
-      child: Row(
+      decoration: BoxDecoration(color: background, borderRadius: BorderRadius.circular(12)),
+      child: const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.check_circle, size: 14, color: colorScheme.onTertiaryContainer),
-          const SizedBox(width: 4),
+          Icon(Icons.check_circle, size: 14, color: foreground),
+          SizedBox(width: 4),
           Text(
             "You're signed up",
-            style: TextStyle(fontSize: 11, color: colorScheme.onTertiaryContainer, fontWeight: FontWeight.w600),
+            style: TextStyle(fontSize: 11, color: foreground, fontWeight: FontWeight.w600),
           ),
         ],
       ),

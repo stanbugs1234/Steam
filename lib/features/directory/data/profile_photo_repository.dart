@@ -9,13 +9,28 @@ class ProfilePhotoRepository {
 
   final FirebaseStorage _storage;
 
+  Reference _photoRef(String uid) => _storage.ref('profile_photos/$uid.jpg');
+
   Future<String> uploadProfilePhoto(String uid, XFile file) async {
-    final ref = _storage.ref('profile_photos/$uid.jpg');
+    final ref = _photoRef(uid);
     if (kIsWeb) {
       await ref.putData(await file.readAsBytes(), SettableMetadata(contentType: 'image/jpeg'));
     } else {
       await ref.putFile(File(file.path), SettableMetadata(contentType: 'image/jpeg'));
     }
-    return ref.getDownloadURL();
+    final url = await ref.getDownloadURL();
+    // Every upload overwrites the same object, so its download URL doesn't
+    // change — without a changing query value the image cache would keep
+    // showing the previous photo.
+    return '$url&v=${DateTime.now().millisecondsSinceEpoch}';
+  }
+
+  /// Removes the stored photo. A photo that's already gone is not an error.
+  Future<void> deleteProfilePhoto(String uid) async {
+    try {
+      await _photoRef(uid).delete();
+    } on FirebaseException catch (e) {
+      if (e.code != 'object-not-found') rethrow;
+    }
   }
 }

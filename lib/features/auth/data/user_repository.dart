@@ -68,6 +68,10 @@ class UserRepository {
 
   Future<void> deletePlaceholder(String docId) => _usersRef.doc(docId).delete();
 
+  /// Deletes a member's own profile document (account deletion). The security
+  /// rules only allow this for the signed-in member's own doc, or an admin.
+  Future<void> deleteAccountDoc(String uid) => _usersRef.doc(uid).delete();
+
   /// Scans approved-status docs (real members and unclaimed `imported_*`
   /// roster placeholders alike) for one that shares a phone or email with
   /// [pendingUser], other than themselves. Phone numbers are compared by
