@@ -12,6 +12,7 @@ import '../../auth/domain/auth_providers.dart';
 import '../../notifications/domain/notification_providers.dart';
 import '../data/volunteer_repository.dart';
 import '../domain/volunteer_providers.dart';
+import '../domain/volunteer_seen.dart';
 import '../../../core/utils/friendly_error.dart';
 
 /// Shown on an event's detail screen: lets members sign up/cancel for
@@ -46,6 +47,7 @@ class VolunteerSlotSection extends ConsumerWidget {
             )
           : null,
       children: [
+        _MarkEventSeen(eventId: eventId),
         slotsAsync.when(
           data: (slots) {
             if (slots.isEmpty) {
@@ -86,6 +88,41 @@ class VolunteerSlotSection extends ConsumerWidget {
       ],
     );
   }
+}
+
+/// Records that this member has looked at the event's volunteer tasks, so the
+/// Home "Volunteer" badge stops counting it (see `volunteer_seen.dart`).
+class _MarkEventSeen extends ConsumerStatefulWidget {
+  const _MarkEventSeen({required this.eventId});
+
+  final String eventId;
+
+  @override
+  ConsumerState<_MarkEventSeen> createState() => _MarkEventSeenState();
+}
+
+class _MarkEventSeenState extends ConsumerState<_MarkEventSeen> {
+  @override
+  void initState() {
+    super.initState();
+    _mark();
+  }
+
+  @override
+  void didUpdateWidget(_MarkEventSeen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.eventId != widget.eventId) _mark();
+  }
+
+  void _mark() {
+    // After the frame: changing a provider while the tree is building isn't allowed.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) ref.read(seenVolunteerEventsProvider.notifier).markSeen(widget.eventId);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) => const SizedBox.shrink();
 }
 
 class _SlotTile extends ConsumerStatefulWidget {

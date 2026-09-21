@@ -16,6 +16,8 @@ import '../../auth/domain/auth_providers.dart';
 import '../../events/domain/event_providers.dart';
 import '../../news/domain/news_providers.dart';
 import '../../volunteering/domain/volunteer_providers.dart';
+import '../../volunteering/domain/volunteer_seen.dart';
+import 'quick_actions.dart';
 
 /// Landing tab: a greeting plus at-a-glance, personalized summaries, so
 /// opening the app feels like arriving at the club rather than straight into
@@ -58,7 +60,7 @@ class HomeDashboardScreen extends ConsumerWidget {
         .where((e) => e.endTime.isAfter(now))
         .sortedBy((e) => e.startTime);
     final nextEvent = upcomingEvents.firstOrNull;
-    final volunteersNeededCount = upcomingEvents.where((e) => e.needsVolunteers).length;
+    final newVolunteerCount = ref.watch(newVolunteerOpportunitiesProvider);
     final nextEventProgress =
         nextEvent != null && nextEvent.needsVolunteers ? ref.watch(eventVolunteerProgressProvider(nextEvent.id)) : null;
 
@@ -133,48 +135,18 @@ class HomeDashboardScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 20),
                 ],
-                Row(
-                  children: [
-                    Expanded(
-                      child: _QuickAction(
-                        icon: Icons.article_outlined,
-                        label: 'News',
-                        onTap: () => onNavigateToTab(1),
-                      ),
+                QuickActionGrid(
+                  actions: [
+                    QuickActionItem(icon: Icons.article_outlined, label: 'News', onTap: () => onNavigateToTab(1)),
+                    QuickActionItem(icon: Icons.calendar_today_outlined, label: 'Events', onTap: () => onNavigateToTab(2)),
+                    QuickActionItem(
+                      icon: Icons.volunteer_activism_outlined,
+                      label: 'Volunteer',
+                      onTap: () => onNavigateToTab(3),
+                      badgeCount: newVolunteerCount,
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _QuickAction(
-                        icon: Icons.calendar_today_outlined,
-                        label: 'Events',
-                        onTap: () => onNavigateToTab(2),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _QuickAction(
-                        icon: Icons.volunteer_activism_outlined,
-                        label: 'Volunteer',
-                        onTap: () => onNavigateToTab(3),
-                        badgeCount: volunteersNeededCount,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _QuickAction(
-                        icon: Icons.people_outline,
-                        label: 'Directory',
-                        onTap: () => onNavigateToTab(4),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _QuickAction(
-                        icon: Icons.qr_code_scanner,
-                        label: 'Check In',
-                        onTap: () => context.push('/checkin'),
-                      ),
-                    ),
+                    QuickActionItem(icon: Icons.people_outline, label: 'Directory', onTap: () => onNavigateToTab(4)),
+                    QuickActionItem(icon: Icons.qr_code_scanner, label: 'Check In', onTap: () => context.push('/checkin')),
                   ],
                 ),
                 if (isAdmin && pendingUsers.isNotEmpty) ...[
@@ -410,41 +382,6 @@ class _HomeHeader extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _QuickAction extends StatelessWidget {
-  const _QuickAction({required this.icon, required this.label, required this.onTap, this.badgeCount = 0});
-
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final int badgeCount;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Card(
-      margin: EdgeInsets.zero,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          child: Column(
-            children: [
-              Badge.count(
-                count: badgeCount,
-                isLabelVisible: badgeCount > 0,
-                child: Icon(icon, color: colorScheme.primary),
-              ),
-              const SizedBox(height: 6),
-              Text(label, style: Theme.of(context).textTheme.labelMedium),
-            ],
-          ),
-        ),
       ),
     );
   }
