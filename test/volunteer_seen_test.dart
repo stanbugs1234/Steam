@@ -8,6 +8,7 @@ import 'package:steam_app/features/auth/domain/auth_providers.dart';
 import 'package:steam_app/features/events/domain/event_providers.dart';
 import 'package:steam_app/features/volunteering/domain/volunteer_providers.dart';
 import 'package:steam_app/features/volunteering/domain/volunteer_seen.dart';
+import 'package:steam_app/features/volunteering/presentation/my_commitments_screen.dart';
 import 'package:steam_app/features/volunteering/presentation/volunteer_slot_section.dart';
 import 'package:steam_app/models/app_user.dart';
 import 'package:steam_app/models/club_event.dart';
@@ -155,6 +156,7 @@ void main() {
       _event('ok'),
     ];
     expect(await count(c, list), 1);
+    expect(c.read(newVolunteerEventIdsProvider), {'ok'});
   });
 
   test('each member has their own seen set', () async {
@@ -209,5 +211,32 @@ void main() {
     expect(container.read(seenVolunteerEventsProvider).value, contains('e1'));
     final prefs = await SharedPreferences.getInstance();
     expect(prefs.getStringList('seenVolunteerEvents:me'), ['e1']);
+  });
+
+  testWidgets('the Volunteer tab tags new opportunities and drops the tag once one is opened', (tester) async {
+    final list = [_event('a'), _event('b')];
+    await tester.pumpWidget(ProviderScope(
+      overrides: [
+        currentUidProvider.overrideWithValue('me'),
+        currentAppUserProvider.overrideWith((ref) => Stream.value(_member('me'))),
+        eventsProvider.overrideWith((ref) => Stream.value(list)),
+        eventSlotsProvider.overrideWith((ref, id) => Stream.value(_open)),
+      ],
+      child: const MaterialApp(home: MyCommitmentsScreen()),
+    ));
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Event a'), findsOneWidget);
+    expect(find.text('NEW'), findsNWidgets(2));
+
+    final container = ProviderScope.containerOf(tester.element(find.byType(MyCommitmentsScreen)));
+    await container.read(seenVolunteerEventsProvider.notifier).markSeen('a');
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('NEW'), findsOneWidget);
+    expect(find.text('Event a'), findsOneWidget, reason: 'still listed, just no longer tagged');
   });
 }

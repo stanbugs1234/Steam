@@ -13,6 +13,7 @@ import '../../auth/domain/auth_providers.dart';
 import '../../events/domain/event_providers.dart';
 import '../../notifications/domain/notification_providers.dart';
 import '../domain/volunteer_providers.dart';
+import '../domain/volunteer_seen.dart';
 
 /// The Volunteer tab: the shifts you've signed up for, and the upcoming
 /// events that still need volunteers, so you can find and join one without
@@ -53,6 +54,7 @@ class MyCommitmentsScreen extends ConsumerWidget {
     final commitmentsAsync = ref.watch(myCommitmentsProvider);
     final eventsAsync = ref.watch(eventsProvider);
     final myUid = ref.watch(currentAppUserProvider).value?.uid;
+    final newEventIds = ref.watch(newVolunteerEventIdsProvider);
     final now = DateTime.now();
 
     return Scaffold(
@@ -101,7 +103,7 @@ class MyCommitmentsScreen extends ConsumerWidget {
                   if (opportunities.isEmpty) const _EmptyRow('Nothing needs volunteers right now. Check back soon!'),
                   for (var i = 0; i < opportunities.length; i++) ...[
                     if (i > 0) const Divider(height: 1),
-                    _OpportunityTile(event: opportunities[i]),
+                    _OpportunityTile(event: opportunities[i], isNew: newEventIds.contains(opportunities[i].id)),
                   ],
                 ],
               ),
@@ -120,9 +122,12 @@ class MyCommitmentsScreen extends ConsumerWidget {
 }
 
 class _OpportunityTile extends ConsumerWidget {
-  const _OpportunityTile({required this.event});
+  const _OpportunityTile({required this.event, required this.isNew});
 
   final ClubEvent event;
+
+  /// Not opened yet: tagged "NEW" until the member views it.
+  final bool isNew;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -130,7 +135,12 @@ class _OpportunityTile extends ConsumerWidget {
 
     return ListTile(
       onTap: () => context.push('/events/${event.id}'),
-      title: Text(event.title),
+      title: Row(
+        children: [
+          Flexible(child: Text(event.title)),
+          if (isNew) ...[const SizedBox(width: 8), const _NewTag()],
+        ],
+      ),
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -142,6 +152,27 @@ class _OpportunityTile extends ConsumerWidget {
         ],
       ),
       trailing: const Icon(Icons.chevron_right),
+    );
+  }
+}
+
+class _NewTag extends StatelessWidget {
+  const _NewTag();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(color: colors.primary, borderRadius: BorderRadius.circular(10)),
+      child: Text(
+        'NEW',
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: colors.onPrimary,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.5,
+            ),
+      ),
     );
   }
 }

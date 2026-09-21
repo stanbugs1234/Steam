@@ -55,26 +55,29 @@ class SeenVolunteerEvents extends AsyncNotifier<Set<String>> {
   }
 }
 
-/// How many volunteer opportunities are new to this member: upcoming events that
+/// The volunteer opportunities that are new to this member: upcoming events that
 /// need volunteers, have a spot left, that they haven't opened, aren't signed up
-/// for and didn't create themselves. This is the number on the Home page's
-/// Volunteer shortcut. Zero until everything it depends on has loaded, so the
-/// badge never flashes a wrong number.
-final newVolunteerOpportunitiesProvider = Provider<int>((ref) {
+/// for and didn't create themselves. The Volunteer tab tags these "NEW" and the
+/// Home page's Volunteer shortcut counts them. Empty until everything it depends
+/// on has loaded, so nothing flashes a wrong tag or number.
+final newVolunteerEventIdsProvider = Provider<Set<String>>((ref) {
   final uid = ref.watch(currentUidProvider);
   final events = ref.watch(eventsProvider).valueOrNull;
   final seen = ref.watch(seenVolunteerEventsProvider).valueOrNull;
   final commitments = ref.watch(myCommitmentsProvider).valueOrNull;
-  if (uid == null || events == null || seen == null || commitments == null) return 0;
+  if (uid == null || events == null || seen == null || commitments == null) return const {};
 
   final mine = {for (final c in commitments) c.event.id};
   final now = DateTime.now();
-  var count = 0;
+  final ids = <String>{};
   for (final event in events) {
     if (!event.needsVolunteers || !event.endTime.isAfter(now)) continue;
     if (event.createdBy == uid || seen.contains(event.id) || mine.contains(event.id)) continue;
     final slots = ref.watch(eventSlotsProvider(event.id)).valueOrNull;
-    if (slots != null && slots.any((s) => !s.isFull)) count++;
+    if (slots != null && slots.any((s) => !s.isFull)) ids.add(event.id);
   }
-  return count;
+  return ids;
 });
+
+/// How many opportunities are new: the number on the Home page's Volunteer shortcut.
+final newVolunteerOpportunitiesProvider = Provider<int>((ref) => ref.watch(newVolunteerEventIdsProvider).length);
