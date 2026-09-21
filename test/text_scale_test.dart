@@ -13,6 +13,7 @@ import 'package:steam_app/features/auth/presentation/pending_approval_screen.dar
 import 'package:steam_app/features/directory/presentation/edit_profile_screen.dart';
 import 'package:steam_app/features/directory/presentation/my_profile_screen.dart';
 import 'package:steam_app/features/events/domain/event_providers.dart';
+import 'package:steam_app/features/events/presentation/events_screen.dart';
 import 'package:steam_app/features/news/domain/news_providers.dart';
 import 'package:steam_app/features/news/presentation/news_feed_screen.dart';
 import 'package:steam_app/features/volunteering/domain/volunteer_providers.dart';
@@ -118,6 +119,7 @@ void main() {
     'Profile': () => const MyProfileScreen(),
     'Edit profile': () => const EditProfileScreen(),
     'News': () => const NewsFeedScreen(),
+    'Events calendar': () => const EventsScreen(),
     'My points': () => const MyPointsScreen(),
     'Volunteer': () => const MyCommitmentsScreen(),
     'Pending approval': () => const PendingApprovalScreen(),
