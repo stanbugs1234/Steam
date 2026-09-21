@@ -190,6 +190,15 @@ await check('member can still leave a slot on an ended event', assertSucceeds(up
 await check('member cannot sign someone else up', assertFails(updateDoc(slot(m2db, 'open', 's1'), { signedUpUserIds: ['member1', 'member1x'] })));
 await check('pending user cannot sign up', assertFails(updateDoc(slot(pdb, 'open', 's1'), { signedUpUserIds: ['member1', 'pending1'] })));
 
+// ---- news --------------------------------------------------------------
+const newsPost = { title: 'Hello', body: 'Body', authorId: 'admin1', authorName: 'Admin', imageUrl: null, category: 'general', pinned: false, eventId: null, createdAt: serverTimestamp() };
+await check('admin publishes a news post', assertSucceeds(setDoc(doc(adb, 'news/p1'), newsPost)));
+await check('admin edits a news post', assertSucceeds(updateDoc(doc(adb, 'news/p1'), { title: 'Edited' })));
+await check('member cannot publish a news post', assertFails(setDoc(doc(mdb, 'news/p2'), newsPost)));
+await check('member can read news', assertSucceeds(getDoc(doc(mdb, 'news/p1'))));
+await check('pending user cannot read news', assertFails(getDoc(doc(pdb, 'news/p1'))));
+await check('admin deletes a news post', assertSucceeds(deleteDoc(doc(adb, 'news/p1'))));
+
 // ---- events: atomic create / delete (what the admin screens do) -----------
 await check('admin creates an event and its slot in one batch', (async () => {
   const batch = writeBatch(adb);
