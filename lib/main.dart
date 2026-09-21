@@ -26,8 +26,13 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await _setUpErrorReporting();
-  // The app is designed for portrait phones.
-  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  // Phones are portrait-only; tablets (iPad, Android tablets) use the whole
+  // screen in any orientation.
+  final view = PlatformDispatcher.instance.views.first;
+  final shortestSideDp = view.physicalSize.shortestSide / view.devicePixelRatio;
+  if (shortestSideDp < 600) {
+    await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  }
 
   // In release builds Flutter's default ErrorWidget renders as an empty box
   // with no message, which on a full-screen build failure just looks like a
