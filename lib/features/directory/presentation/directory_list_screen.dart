@@ -15,6 +15,7 @@ import '../../../core/widgets/top_volunteer_badge.dart';
 import '../../../models/app_user.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../../volunteering/domain/volunteer_providers.dart';
+import 'kids_list.dart';
 
 final _directorySearchProvider = StateProvider<String>((ref) => '');
 final _directoryGradeFilterProvider = StateProvider<String?>((ref) => null);
@@ -243,9 +244,6 @@ class _MemberTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isTopVolunteer = ref.watch(topVolunteerUidsProvider).contains(member.uid);
     final colorScheme = Theme.of(context).colorScheme;
-    final kidsLabel = member.kids
-        .map((k) => k.grade.isNotEmpty ? '${k.name} (${k.grade})' : k.name)
-        .join(' · ');
 
     return Card(
       margin: EdgeInsets.zero,
@@ -261,7 +259,7 @@ class _MemberTile extends ConsumerWidget {
               : null,
         ),
         title: Text(member.name, overflow: TextOverflow.ellipsis),
-        subtitle: (member.isAdmin || isTopVolunteer || member.isNewMember || member.duesPaid || kidsLabel.isNotEmpty)
+        subtitle: (member.isAdmin || isTopVolunteer || member.isNewMember || member.duesPaid || member.kids.isNotEmpty)
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -279,7 +277,7 @@ class _MemberTile extends ConsumerWidget {
                         ],
                       ),
                     ),
-                  if (kidsLabel.isNotEmpty) Text(kidsLabel),
+                  if (member.kids.isNotEmpty) KidsList(kids: member.kids),
                 ],
               )
             : null,
