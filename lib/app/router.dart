@@ -19,6 +19,7 @@ import '../features/events/presentation/event_detail_screen.dart';
 import '../features/events/presentation/event_editor_screen.dart';
 import '../features/news/presentation/news_detail_screen.dart';
 import '../features/news/presentation/news_editor_screen.dart';
+import '../features/news/presentation/news_feed_screen.dart';
 import '../features/volunteering/presentation/volunteer_leaderboard_screen.dart';
 import '../features/volunteering/presentation/volunteer_slots_admin_screen.dart';
 import '../models/app_user.dart';
@@ -117,6 +118,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/directory/:uid',
         builder: (context, state) => MemberDetailScreen(uid: state.pathParameters['uid']!),
       ),
+      // News is no longer a bottom-nav tab; it's reached from Home's "Latest
+      // News" section (and this route) instead.
+      GoRoute(path: '/news', builder: (context, state) => const NewsFeedScreen()),
       GoRoute(path: '/news/new', builder: (context, state) => const NewsEditorScreen()),
       GoRoute(
         path: '/news/:id',

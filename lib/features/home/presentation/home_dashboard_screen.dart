@@ -74,7 +74,6 @@ class HomeDashboardScreen extends ConsumerWidget {
     final pendingUsers = isAdmin ? (ref.watch(pendingUsersProvider).value ?? const <AppUser>[]) : const <AppUser>[];
 
     final recentPosts = (newsAsync.value ?? const []).take(3).toList();
-    final topVolunteers = ref.watch(volunteerLeaderboardProvider).take(3).toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Home')),
@@ -137,7 +136,7 @@ class HomeDashboardScreen extends ConsumerWidget {
                 ],
                 QuickActionGrid(
                   actions: [
-                    QuickActionItem(icon: Icons.article_outlined, label: 'News', onTap: () => onNavigateToTab(1)),
+                    QuickActionItem(icon: Icons.article_outlined, label: 'News', onTap: () => context.push('/news')),
                     QuickActionItem(icon: Icons.calendar_today_outlined, label: 'Events', onTap: () => onNavigateToTab(2)),
                     QuickActionItem(
                       icon: Icons.volunteer_activism_outlined,
@@ -233,42 +232,6 @@ class HomeDashboardScreen extends ConsumerWidget {
                         ListTile(title: Text('No upcoming events right now.')),
                       ],
                     ),
-                  if (topVolunteers.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    SectionCard(
-                      title: 'Top Volunteers',
-                      icon: Icons.emoji_events_outlined,
-                      padding: EdgeInsets.zero,
-                      trailing: TextButton(
-                        onPressed: () => context.push('/leaderboard'),
-                        child: const Text('See all'),
-                      ),
-                      children: [
-                        for (var i = 0; i < topVolunteers.length; i++) ...[
-                          if (i > 0) const Divider(height: 1),
-                          ListTile(
-                            leading: CircleAvatar(
-                              radius: 18,
-                              backgroundColor: colorScheme.primaryContainer,
-                              backgroundImage: topVolunteers[i].member.photoUrl != null
-                                  ? avatarImage(topVolunteers[i].member.photoUrl!, 18)
-                                  : null,
-                              child: topVolunteers[i].member.photoUrl == null
-                                  ? Text(
-                                      _initials(topVolunteers[i].member.name),
-                                      style: TextStyle(color: colorScheme.onPrimaryContainer, fontSize: 12),
-                                    )
-                                  : null,
-                            ),
-                            title: Text(topVolunteers[i].member.name, overflow: TextOverflow.ellipsis),
-                            subtitle: Text('${topVolunteers[i].hours.toStringAsFixed(1)} hrs'),
-                            trailing: const Icon(Icons.chevron_right),
-                            onTap: () => context.push('/directory/${topVolunteers[i].member.uid}'),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ],
                   if (recentPosts.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     SectionCard(
@@ -276,7 +239,7 @@ class HomeDashboardScreen extends ConsumerWidget {
                       icon: Icons.article_outlined,
                       padding: EdgeInsets.zero,
                       trailing: TextButton(
-                        onPressed: () => onNavigateToTab(1),
+                        onPressed: () => context.push('/news'),
                         child: const Text('See all'),
                       ),
                       children: [

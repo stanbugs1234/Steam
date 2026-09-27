@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../features/dashboard/presentation/dashboard_screen.dart';
 import '../features/directory/presentation/directory_list_screen.dart';
 import '../features/directory/presentation/my_profile_screen.dart';
 import '../features/events/presentation/events_screen.dart';
 import '../features/home/presentation/home_dashboard_screen.dart';
-import '../features/news/presentation/news_feed_screen.dart';
 import '../features/notifications/domain/reminder_sync.dart';
 import '../features/volunteering/presentation/my_commitments_screen.dart';
 
@@ -28,7 +28,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   late final List<Widget Function()> _tabBuilders = [
     () => HomeDashboardScreen(onNavigateToTab: _navigateToTab),
-    () => const NewsFeedScreen(),
+    () => const DashboardScreen(),
     () => const EventsScreen(),
     () => const MyCommitmentsScreen(),
     () => const DirectoryListScreen(),
@@ -54,7 +54,8 @@ class _HomeShellState extends ConsumerState<HomeShell> {
         onDestinationSelected: _navigateToTab,
         destinations: const [
           NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.article_outlined), selectedIcon: Icon(Icons.article), label: 'News'),
+          NavigationDestination(
+              icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'Dashboard'),
           NavigationDestination(
               icon: Icon(Icons.calendar_today_outlined), selectedIcon: Icon(Icons.calendar_today), label: 'Events'),
           NavigationDestination(
