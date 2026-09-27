@@ -384,6 +384,13 @@ class _ProfileBody extends ConsumerWidget {
                     ),
                     onTap: () => context.push('/admin/approvals'),
                   ),
+                  const Divider(height: 1),
+                  ListTile(
+                    leading: Icon(Icons.vpn_key_outlined, color: colors.primary),
+                    title: const Text('Club settings'),
+                    trailing: const Icon(Icons.chevron_right),
+                    onTap: () => context.push('/admin/settings'),
+                  ),
                 ],
               ],
             ),

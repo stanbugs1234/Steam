@@ -57,6 +57,22 @@ class UserRepository {
     return AppUser.fromFirestore(doc.id, doc.data());
   }
 
+  /// Mirrors [findApprovedPlaceholderByPhone] for a verified email address —
+  /// only ever call this once the caller's `email_verified` is true, since
+  /// that's the only reason the rules trust the match.
+  Future<AppUser?> findApprovedPlaceholderByEmail(String email) async {
+    final normalized = email.trim().toLowerCase();
+    final snap = await _usersRef
+        .where('email', isEqualTo: normalized)
+        .where('status', isEqualTo: UserStatus.approved.name)
+        .limit(1)
+        .get();
+    if (snap.docs.isEmpty) return null;
+    final doc = snap.docs.first;
+    if (!doc.id.startsWith('imported_')) return null;
+    return AppUser.fromFirestore(doc.id, doc.data());
+  }
+
   Future<void> deletePlaceholder(String docId) => _usersRef.doc(docId).delete();
 
   /// Deletes a member's own profile document (account deletion). The security

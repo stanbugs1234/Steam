@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../features/admin/presentation/approval_queue_screen.dart';
+import '../features/admin/presentation/club_settings_screen.dart';
 import '../features/attendance/presentation/checkin_qr_screen.dart';
 import '../features/attendance/presentation/checkin_scanner_screen.dart';
 import '../features/attendance/presentation/my_points_screen.dart';
@@ -152,6 +153,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       // Not '/profile/edit': the admin-only guard above rejects any path ending in '/edit'.
       GoRoute(path: '/edit-profile', builder: (context, state) => const EditProfileScreen()),
       GoRoute(path: '/admin/approvals', builder: (context, state) => const ApprovalQueueScreen()),
+      GoRoute(path: '/admin/settings', builder: (context, state) => const ClubSettingsScreen()),
       GoRoute(path: '/leaderboard', builder: (context, state) => const VolunteerLeaderboardScreen()),
     ],
   );

@@ -48,6 +48,24 @@ for (const u of real) {
   }
 }
 
+// A real (already-signed-up) account that shares a phone/email with a
+// placeholder that never got merged into it — the exact "signed up before
+// their roster row was imported" gap that auto-merge-on-signup can't catch,
+// since it only ever looks for a placeholder at the moment someone signs up.
+const normalizedPhone = (p) => (p ?? '').toString().replace(/\D/g, '').slice(-10);
+const normalizedEmail = (e) => (e ?? '').toString().trim().toLowerCase();
+for (const u of real) {
+  if (u.mergedFromId) continue; // already merged
+  const phone = normalizedPhone(u.phone);
+  const email = normalizedEmail(u.email);
+  const dupe = placeholders.find(
+    (p) => (phone && phone === normalizedPhone(p.phone)) || (email && email === normalizedEmail(p.email)),
+  );
+  if (dupe) {
+    add(u, `looks like the same person as unclaimed placeholder ${dupe.id} (shared phone/email) — merge them manually`);
+  }
+}
+
 console.log(`Roster entries still unclaimed: ${placeholders.length}`);
 console.log(`Real member accounts: ${real.length}`);
 console.log(problems.length ? `\n${problems.length} thing(s) to fix:\n` : '\nNo problems found.');

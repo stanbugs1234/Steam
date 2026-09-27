@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/widgets/children_form_field.dart';
 import '../../../models/app_user.dart';
 import '../../../models/child_info.dart';
+import '../../admin/domain/club_config_providers.dart';
 import '../data/user_repository.dart';
 import '../domain/auth_providers.dart';
 import '../../../core/utils/friendly_error.dart';
@@ -18,6 +20,32 @@ import '../../../core/widgets/password_field.dart';
 enum _SignupMode { email, phone }
 
 enum _PhoneStep { number, code, completeProfile }
+
+enum _EmailStep { form, verifyEmail, completeProfile }
+
+/// Local, device-only memory of having already entered the right join code —
+/// so returning to sign-up (or the app relaunching mid-flow) doesn't ask
+/// again. Not tied to an account: nobody is signed in yet when this matters.
+const _joinCodeAcceptedPrefsKey = 'joinCodeAccepted';
+
+/// Whether the join-code step should be shown right now. Pulled out as a pure
+/// function (mirrors `resolveRedirect` in `router.dart`) so this can't
+/// silently regress — e.g. into blocking a resuming sign-up, or into a
+/// permanent lockout if `config/app` fails to load.
+@visibleForTesting
+bool needsJoinCodeStep({
+  required bool resumingFlow,
+  required bool joinCodeAccepted,
+  required bool joinCodeLoaded,
+  required String? configuredCode,
+}) {
+  // Already past this step earlier in the same flow — never re-ask, and
+  // never let a cleared local flag or a slow config read strand someone
+  // who's already signed in and mid-signup.
+  if (resumingFlow || joinCodeAccepted || !joinCodeLoaded) return false;
+  // No code configured: the club hasn't turned this on, so sign-up is open.
+  return configuredCode != null;
+}
 
 class SignupScreen extends ConsumerStatefulWidget {
   const SignupScreen({super.key});
@@ -34,8 +62,9 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   final _passwordCtrl = TextEditingController();
   final _confirmCtrl = TextEditingController();
 
-  // Shared between the email form and the phone "complete profile" step —
-  // only one of those is ever active in a given session.
+  // Shared between the phone and email "complete profile" steps (and,
+  // likewise, _nameCtrl/_phoneCtrl below are reused by both) — only one flow
+  // is ever active in a given session.
   List<ChildInfo> _kids = [];
 
   bool _submitting = false;
@@ -63,18 +92,68 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   int _resendCooldownSeconds = 0;
   Timer? _cooldownTimer;
 
+  // Email flow: Step 1 email+password, Step 2 "check your email", Step 3
+  // (new users only) complete profile — mirrors the phone flow above.
+  _EmailStep _emailStep = _EmailStep.form;
+  User? _verifiedEmailUser;
+  bool _checkingVerification = false;
+  bool _completingEmailProfile = false;
+
+  // Club join code: a device-remembered, one-time gate shown before either
+  // sign-up path. `null` while still loading the stored flag.
+  bool? _joinCodeAccepted;
+  final _joinCodeFormKey = GlobalKey<FormState>();
+  final _joinCodeCtrl = TextEditingController();
+  bool _checkingJoinCode = false;
+
   @override
   void initState() {
     super.initState();
     // The router sends anyone who is signed in but has no profile yet back
-    // here (a fresh phone signup, or one interrupted part-way). Pick up at the
-    // "finish your profile" step rather than asking them to sign in again.
+    // here (a fresh signup, or one interrupted part-way). Pick up at the
+    // right step rather than asking them to start over.
     final signedIn = ref.read(authStateProvider).valueOrNull;
     if (signedIn != null) {
-      _mode = _SignupMode.phone;
-      _verifiedPhoneUser = signedIn;
-      _e164Phone = signedIn.phoneNumber;
-      _phoneStep = _PhoneStep.completeProfile;
+      final isEmailAccount = signedIn.providerData.any((p) => p.providerId == EmailAuthProvider.PROVIDER_ID);
+      if (isEmailAccount) {
+        _mode = _SignupMode.email;
+        _verifiedEmailUser = signedIn;
+        _emailStep = signedIn.emailVerified ? _EmailStep.completeProfile : _EmailStep.verifyEmail;
+        // The cached flag can be stale if verification happened outside the
+        // app (e.g. tapping the email link in a browser); refresh it once
+        // mounted rather than blocking initState on a network call.
+        WidgetsBinding.instance.addPostFrameCallback((_) => _refreshEmailVerification());
+      } else {
+        _mode = _SignupMode.phone;
+        _verifiedPhoneUser = signedIn;
+        _e164Phone = signedIn.phoneNumber;
+        _phoneStep = _PhoneStep.completeProfile;
+      }
+    }
+    _loadJoinCodeAccepted();
+  }
+
+  Future<void> _loadJoinCodeAccepted() async {
+    bool accepted = false;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      accepted = prefs.getBool(_joinCodeAcceptedPrefsKey) ?? false;
+    } catch (_) {
+      // Storage unavailable: fall through and ask for the code.
+    }
+    if (mounted) setState(() => _joinCodeAccepted = accepted);
+  }
+
+  Future<void> _refreshEmailVerification() async {
+    final user = _verifiedEmailUser;
+    if (user == null || user.emailVerified) return;
+    try {
+      await user.reload();
+    } catch (_) {
+      return;
+    }
+    if (mounted && user.emailVerified && _emailStep == _EmailStep.verifyEmail) {
+      setState(() => _emailStep = _EmailStep.completeProfile);
     }
   }
 
@@ -100,10 +179,15 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
     _phoneNameCtrl.dispose();
     _phoneNumberCtrl.dispose();
     _smsCodeCtrl.dispose();
+    _joinCodeCtrl.dispose();
     _cooldownTimer?.cancel();
     super.dispose();
   }
 
+  /// Step 1 of the email path: create the account and send a verification
+  /// link. Name/phone/kids are collected later, once verified (see
+  /// `_buildEmailCompleteProfileStep`) — collecting them here instead would
+  /// lose them if the app is closed while waiting on the email.
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() {
@@ -113,45 +197,145 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
 
     try {
       final authRepo = ref.read(authRepositoryProvider);
-      final userRepo = ref.read(userRepositoryProvider);
-
       final email = _emailCtrl.text.trim();
-      final credential = await authRepo.signUp(
-        email: email,
-        password: _passwordCtrl.text,
-      );
-      final uid = credential.user!.uid;
-
-      // Email signups are always approved by an admin. Firebase attaches an
-      // email to accounts whose address was never verified, so it can't be
-      // trusted to claim a roster member's record automatically — the admin
-      // sees any matching roster entry and merges it (a phone number, which
-      // is SMS-verified, is what auto-merges).
+      final credential = await authRepo.signUp(email: email, password: _passwordCtrl.text);
+      final user = credential.user!;
       try {
-        await userRepo.createProfile(AppUser(
-          uid: uid,
-          name: _nameCtrl.text.trim(),
-          email: email,
-          phone: _phoneCtrl.text.trim(),
-          kids: _kids,
-          role: UserRole.member,
-          status: UserStatus.pending,
-        ));
+        await user.sendEmailVerification();
       } catch (_) {
-        // Don't strand a login with no profile (a retry would just say the
-        // email is already in use).
-        try {
-          await credential.user?.delete();
-        } catch (_) {}
-        rethrow;
+        // Non-fatal — they can use Resend on the next screen.
       }
-      // Router redirect will move to /pending-approval automatically.
+      if (!mounted) return;
+      setState(() {
+        _verifiedEmailUser = user;
+        _emailStep = _EmailStep.verifyEmail;
+      });
     } on FirebaseAuthException catch (e) {
       setState(() => _errorText = friendlyError(e, fallback: 'Could not create your account. Please try again.'));
     } catch (e) {
       setState(() => _errorText = 'Something went wrong. Please try again.');
     } finally {
       if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  Future<void> _resendVerificationEmail() async {
+    final user = _verifiedEmailUser;
+    if (user == null) return;
+    setState(() => _errorText = null);
+    try {
+      await user.sendEmailVerification();
+      _startResendCooldown();
+    } on FirebaseAuthException catch (e) {
+      setState(() => _errorText = _messageForAuthError(e));
+    } catch (_) {
+      setState(() => _errorText = 'Something went wrong. Please try again.');
+    }
+  }
+
+  /// "Continue" on the verify-email step: re-checks with Firebase whether the
+  /// link has been tapped yet.
+  Future<void> _checkEmailVerified() async {
+    final user = _verifiedEmailUser;
+    if (user == null) return;
+    setState(() {
+      _checkingVerification = true;
+      _errorText = null;
+    });
+    try {
+      await user.reload();
+      if (!user.emailVerified) {
+        setState(() => _errorText = 'Not verified yet — check your email (and spam folder), then try again.');
+        return;
+      }
+      if (!mounted) return;
+      setState(() => _emailStep = _EmailStep.completeProfile);
+    } catch (_) {
+      setState(() => _errorText = 'Something went wrong. Please try again.');
+    } finally {
+      if (mounted) setState(() => _checkingVerification = false);
+    }
+  }
+
+  /// Step 3 of the email path, once verified: mirrors `_finishPhoneProfile`
+  /// exactly, using a verified email in place of a verified phone number.
+  Future<void> _finishEmailProfile() async {
+    if (!(_completeProfileFormKey.currentState?.validate() ?? false)) return;
+    final firebaseUser = _verifiedEmailUser;
+    if (firebaseUser == null) return;
+
+    setState(() {
+      _completingEmailProfile = true;
+      _errorText = null;
+    });
+
+    final userRepo = ref.read(userRepositoryProvider);
+    try {
+      final email = firebaseUser.email ?? '';
+      AppUser? placeholder;
+      try {
+        placeholder = email.isEmpty ? null : await userRepo.findApprovedPlaceholderByEmail(email);
+      } catch (_) {
+        // If the lookup fails for any reason, fall through to a normal
+        // pending signup rather than blocking the user from signing up.
+        placeholder = null;
+      }
+
+      final merged = AppUser(
+        uid: firebaseUser.uid,
+        name: _nameCtrl.text.trim(),
+        email: email,
+        phone: _phoneCtrl.text.trim(),
+        kids: _kids.isNotEmpty ? _kids : (placeholder?.kids ?? const []),
+        role: UserRole.member,
+        status: placeholder != null ? UserStatus.approved : UserStatus.pending,
+        mergedFromId: placeholder?.uid,
+        createdAt: placeholder?.createdAt,
+        memberNumber: placeholder?.memberNumber,
+        clubPoints: placeholder?.clubPoints,
+        yearlyPoints: placeholder?.yearlyPoints,
+        duesPaid: placeholder?.duesPaid ?? false,
+        isNewMember: placeholder?.isNewMember ?? false,
+      );
+
+      if (placeholder != null) {
+        await userRepo.createProfileClaiming(merged, placeholder.uid);
+      } else {
+        await userRepo.createProfile(merged);
+      }
+      // Router redirect will move to /pending-approval (or straight to /home
+      // if merged as approved) automatically.
+    } catch (e) {
+      setState(() => _errorText = 'Something went wrong. Please try again.');
+    } finally {
+      if (mounted) setState(() => _completingEmailProfile = false);
+    }
+  }
+
+  Future<void> _checkJoinCode() async {
+    if (!(_joinCodeFormKey.currentState?.validate() ?? false)) return;
+    setState(() {
+      _checkingJoinCode = true;
+      _errorText = null;
+    });
+    try {
+      final configured = await ref.read(joinCodeProvider.future);
+      final entered = _joinCodeCtrl.text.trim().toLowerCase();
+      if (configured == null || entered != configured.trim().toLowerCase()) {
+        setState(() => _errorText = "That code doesn't look right. Check with the club and try again.");
+        return;
+      }
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool(_joinCodeAcceptedPrefsKey, true);
+      } catch (_) {
+        // Best-effort — they'll just be asked again next time.
+      }
+      if (mounted) setState(() => _joinCodeAccepted = true);
+    } catch (_) {
+      setState(() => _errorText = "Couldn't check that right now. Please try again.");
+    } finally {
+      if (mounted) setState(() => _checkingJoinCode = false);
     }
   }
 
@@ -381,15 +565,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           TextFormField(
-            controller: _nameCtrl,
-            textCapitalization: TextCapitalization.words,
-            textInputAction: TextInputAction.next,
-            autofillHints: const [AutofillHints.name],
-            decoration: const InputDecoration(labelText: 'Your full name'),
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-          ),
-          const SizedBox(height: 12),
-          TextFormField(
             controller: _emailCtrl,
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.next,
@@ -398,15 +573,6 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
             decoration: const InputDecoration(labelText: 'Email'),
             validator: (v) => (v == null || !v.contains('@')) ? 'Enter a valid email' : null,
           ),
-          const SizedBox(height: 12),
-          TextFormField(
-            controller: _phoneCtrl,
-            keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(labelText: 'Phone'),
-            validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
-          ),
-          const SizedBox(height: 12),
-          ChildrenFormField(initialChildren: _kids, onChanged: (kids) => _kids = kids),
           const SizedBox(height: 12),
           PasswordField(
             controller: _passwordCtrl,
@@ -435,7 +601,122 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                     width: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Request Account'),
+                : const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVerifyEmailStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'We sent a verification link to ${_verifiedEmailUser?.email ?? _emailCtrl.text.trim()}. '
+          'Tap the link, then come back and press Continue.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        if (_errorText != null) ...[
+          const SizedBox(height: 12),
+          Text(_errorText!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+        ],
+        const SizedBox(height: 20),
+        FilledButton(
+          onPressed: _checkingVerification ? null : _checkEmailVerified,
+          child: _checkingVerification
+              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Text('Continue'),
+        ),
+        const SizedBox(height: 12),
+        TextButton(
+          onPressed: _resendCooldownSeconds > 0 ? null : _resendVerificationEmail,
+          child: Text(_resendCooldownSeconds > 0 ? 'Resend email (${_resendCooldownSeconds}s)' : 'Resend email'),
+        ),
+        TextButton(
+          onPressed: _checkingVerification ? null : () => ref.read(authRepositoryProvider).signOut(),
+          child: const Text('Use a different account'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmailCompleteProfileStep() {
+    return Form(
+      key: _completeProfileFormKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            "You're verified — just need a couple more details.",
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 16),
+          TextFormField(
+            controller: _nameCtrl,
+            textCapitalization: TextCapitalization.words,
+            textInputAction: TextInputAction.next,
+            autofillHints: const [AutofillHints.name],
+            decoration: const InputDecoration(labelText: 'Your full name'),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _phoneCtrl,
+            keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(labelText: 'Phone'),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+          ),
+          const SizedBox(height: 12),
+          ChildrenFormField(initialChildren: _kids, onChanged: (kids) => _kids = kids),
+          if (_errorText != null) ...[
+            const SizedBox(height: 12),
+            Text(_errorText!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          ],
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: _completingEmailProfile ? null : _finishEmailProfile,
+            child: _completingEmailProfile
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Text('Finish'),
+          ),
+          TextButton(
+            onPressed: _completingEmailProfile ? null : () => ref.read(authRepositoryProvider).signOut(),
+            child: const Text('Use a different account'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildJoinCodeStep() {
+    return Form(
+      key: _joinCodeFormKey,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextFormField(
+            controller: _joinCodeCtrl,
+            textCapitalization: TextCapitalization.characters,
+            textInputAction: TextInputAction.done,
+            decoration: const InputDecoration(labelText: 'Club code'),
+            validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+            onFieldSubmitted: (_) => _checkingJoinCode ? null : _checkJoinCode(),
+          ),
+          if (_errorText != null) ...[
+            const SizedBox(height: 12),
+            Text(_errorText!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+          ],
+          const SizedBox(height: 20),
+          FilledButton(
+            onPressed: _checkingJoinCode ? null : _checkJoinCode,
+            child: _checkingJoinCode
+                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Continue'),
           ),
         ],
       ),
@@ -574,6 +855,41 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
   Widget build(BuildContext context) {
     final isRegistering = _mode == _SignupMode.email || _phoneStep == _PhoneStep.completeProfile;
 
+    // Once already signed in and resuming mid-flow, the join code was
+    // necessarily passed already — never re-ask (it could even strand a
+    // returning member if local storage was cleared since).
+    final resumingFlow = _verifiedPhoneUser != null || _verifiedEmailUser != null;
+    final joinCodeAsync = ref.watch(joinCodeProvider);
+    // `hasError` counts as "loaded" too: a config read that never resolves
+    // must not block sign-up forever — see needsJoinCodeStep's doc comment.
+    final joinCodeLoaded = _joinCodeAccepted != null && (joinCodeAsync.hasValue || joinCodeAsync.hasError);
+    final joinCodeStillLoading = !resumingFlow && !joinCodeLoaded;
+    // Fails open on a loading/error config read — the real gate remains
+    // admin approval, so a transient read problem shouldn't block sign-up.
+    final needsJoinCode = needsJoinCodeStep(
+      resumingFlow: resumingFlow,
+      joinCodeAccepted: _joinCodeAccepted ?? false,
+      joinCodeLoaded: joinCodeLoaded,
+      configuredCode: joinCodeAsync.valueOrNull,
+    );
+    final showingVerifyEmail = _mode == _SignupMode.email && _emailStep == _EmailStep.verifyEmail;
+
+    String title;
+    String subtitle;
+    if (!resumingFlow && joinCodeStillLoading) {
+      title = 'Join STEAM Club';
+      subtitle = '';
+    } else if (needsJoinCode) {
+      title = 'Enter your club code';
+      subtitle = "Ask the club if you don't have one.";
+    } else if (showingVerifyEmail) {
+      title = 'Verify your email';
+      subtitle = 'Check your inbox for a link from us.';
+    } else {
+      title = isRegistering ? 'Join STEAM Club' : 'Sign in with your phone number';
+      subtitle = isRegistering ? 'An admin will review and approve your request.' : "We'll text you a one-time code.";
+    }
+
     return Scaffold(
       appBar: AppBar(title: Text(isRegistering ? 'Request an Account' : 'Sign in')),
       body: SafeArea(
@@ -588,30 +904,33 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
                 children: [
                   Center(child: Image.asset('assets/icon/icon.png', height: 72)),
                   const SizedBox(height: 12),
-                  Text(
-                    isRegistering ? 'Join STEAM Club' : 'Sign in with your phone number',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
+                  Text(title, style: Theme.of(context).textTheme.headlineSmall),
                   const SizedBox(height: 4),
-                  Text(
-                    isRegistering
-                        ? 'An admin will review and approve your request.'
-                        : "We'll text you a one-time code.",
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
+                  Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
                   const SizedBox(height: 20),
-                  if (_mode == _SignupMode.email || _phoneStep == _PhoneStep.number) ...[
-                    _buildModeToggle(),
-                    const SizedBox(height: 20),
+                  if (!resumingFlow && joinCodeStillLoading)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 20),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (needsJoinCode)
+                    _buildJoinCodeStep()
+                  else if (showingVerifyEmail)
+                    _buildVerifyEmailStep()
+                  else ...[
+                    if (_mode == _SignupMode.email || _phoneStep == _PhoneStep.number) ...[
+                      _buildModeToggle(),
+                      const SizedBox(height: 20),
+                    ],
+                    if (_mode == _SignupMode.email)
+                      (_emailStep == _EmailStep.completeProfile ? _buildEmailCompleteProfileStep() : _buildEmailForm())
+                    else if (_phoneStep == _PhoneStep.completeProfile)
+                      _buildCompleteProfileStep()
+                    else if (_phoneStep == _PhoneStep.code)
+                      _buildCodeEntryStep()
+                    else
+                      _buildPhoneNumberStep(),
                   ],
-                  if (_mode == _SignupMode.email)
-                    _buildEmailForm()
-                  else if (_phoneStep == _PhoneStep.completeProfile)
-                    _buildCompleteProfileStep()
-                  else if (_phoneStep == _PhoneStep.code)
-                    _buildCodeEntryStep()
-                  else
-                    _buildPhoneNumberStep(),
                   const SizedBox(height: 12),
                   TextButton(
                     onPressed: () => context.go('/login'),

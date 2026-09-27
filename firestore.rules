@@ -21,6 +21,16 @@ service cloud.firestore {
       return isSignedIn() && myProfile().status == 'approved';
     }
 
+    // A single club-wide settings doc. `joinCode` is a volume filter shown on
+    // the sign-up screen before anyone is signed in, not a real secret (a
+    // value the client must read pre-auth can't be one) — the actual gate
+    // that decides who gets in stays admin approval below. Public get only
+    // (no list), so nothing else under /config is enumerable.
+    match /config/app {
+      allow get: if true;
+      allow write: if isAdmin();
+    }
+
     // Members can only read their own doc until approved; approved members
     // can read the directory of other approved members; admins can read
     // everyone (needed for the approval queue).
@@ -29,20 +39,25 @@ service cloud.firestore {
         request.auth.uid == uid
         || isAdmin()
         || (isApprovedMember() && resource.data.status == 'approved')
-        // A phone-verified signup may look up a bulk-imported roster
-        // placeholder matching their own verified phone, to merge into it
-        // instead of creating a disconnected duplicate account. (There is
-        // deliberately no email equivalent: Firebase issues an email claim for
-        // accounts whose email was never verified, so it can't prove who
-        // someone is. Email signups are approved by an admin instead.)
+        // A phone-verified or (verified-)email signup may look up a
+        // bulk-imported roster placeholder matching their own proven contact
+        // info, to merge into it instead of creating a disconnected duplicate
+        // account. `email_verified` is what makes the email case safe:
+        // Firebase attaches an email to an account before it's ever verified,
+        // so an unverified `token.email` can't prove who someone is — an
+        // admin approves those instead.
         // No `uid.matches('imported_.*')` here on purpose: a query can only be
-        // authorised by what it filters on (phone ==), and Firestore can't
-        // prove a document-id pattern for a list — with it, the signup lookup
-        // was always denied and the merge never happened. Matching the
-        // caller's own verified phone is what scopes this.
+        // authorised by what it filters on (phone/email ==), and Firestore
+        // can't prove a document-id pattern for a list — with it, the signup
+        // lookup was always denied and the merge never happened. Matching the
+        // caller's own verified contact info is what scopes this.
         || (
           request.auth.token.phone_number != null
           && request.auth.token.phone_number == resource.data.phone
+        )
+        || (
+          request.auth.token.email_verified == true
+          && request.auth.token.email == resource.data.email
         )
       );
 
@@ -105,11 +120,12 @@ service cloud.firestore {
       }
 
       // Self-signup always starts as a pending member; role/status can't be
-      // set by the person creating the account. Exception: a phone-verified
-      // user may create their own doc pre-approved if it explicitly claims a
-      // matching, already-approved import placeholder (verified server-side
-      // via get() against their own verified phone) — role is still forced
-      // to 'member', so merging can never grant admin.
+      // set by the person creating the account. Exception: a phone-verified or
+      // verified-email user may create their own doc pre-approved if it
+      // explicitly claims a matching, already-approved import placeholder
+      // (verified server-side via get() against their own proven contact
+      // info) — role is still forced to 'member', so merging can never grant
+      // admin.
       allow create: if isSignedIn()
         && request.auth.uid == uid
         && hasOnlyKnownUserFields()
@@ -124,6 +140,16 @@ service cloud.firestore {
             && request.resource.data.mergedFromId is string
             && request.resource.data.mergedFromId.matches('imported_.*')
             && claimedPlaceholder().phone == request.auth.token.phone_number
+            && claimedPlaceholder().status == 'approved'
+            && claimsOnlyRosterValues()
+          )
+          || (
+            request.auth.token.email_verified == true
+            && request.resource.data.role == 'member'
+            && request.resource.data.status == 'approved'
+            && request.resource.data.mergedFromId is string
+            && request.resource.data.mergedFromId.matches('imported_.*')
+            && claimedPlaceholder().email == request.auth.token.email
             && claimedPlaceholder().status == 'approved'
             && claimsOnlyRosterValues()
           )
@@ -145,14 +171,17 @@ service cloud.firestore {
       );
 
       // Admins can delete anyone, and a member can delete their own account
-      // (in-app account deletion). A phone-verified user may also delete the
-      // specific import placeholder they just claimed by matching phone,
-      // cleaning up the duplicate once merged into their real account.
+      // (in-app account deletion). A phone-verified or verified-email user may
+      // also delete the specific import placeholder they just claimed by
+      // matching contact info, cleaning up the duplicate once merged into
+      // their real account.
       allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == uid) || (
         uid.matches('imported_.*')
         && isSignedIn()
-        && request.auth.token.phone_number != null
-        && request.auth.token.phone_number == resource.data.phone
+        && (
+          (request.auth.token.phone_number != null && request.auth.token.phone_number == resource.data.phone)
+          || (request.auth.token.email_verified == true && request.auth.token.email == resource.data.email)
+        )
       );
 
       // A member's own check-in history. Doc id is the eventId, so a repeat

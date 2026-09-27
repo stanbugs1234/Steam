@@ -32,6 +32,11 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(db, 'users/imported_5_Pat'), { ...base, ...ROSTER, name: 'Pat', email: 'pat@x.com', phone: '+15045550001', createdAt: joined });
   await setDoc(doc(db, 'users/imported_6_Sam'), { ...base, ...ROSTER, name: 'Sam', email: 'sam@x.com', phone: '+15045550002', createdAt: joined });
   await setDoc(doc(db, 'users/imported_7_Kim'), { ...base, ...ROSTER, name: 'Kim', email: 'kim@x.com', phone: '+15045550003', createdAt: joined });
+  // Dedicated to the email-verify read/delete tests below, which actually
+  // delete it — kept separate from Sam/Kim so it can't disturb the phone
+  // tests that run afterward and expect those docs to still exist.
+  await setDoc(doc(db, 'users/imported_8_Alex'), { ...base, ...ROSTER, name: 'Alex', email: 'alex@x.com', phone: '+15045550005', createdAt: joined });
+  await setDoc(doc(db, 'users/imported_9_Jordan'), { ...base, ...ROSTER, name: 'Jordan', email: 'jordan@x.com', phone: '+15045550006', createdAt: joined });
 
   const ev = (extra) => ({ title: 'Monthly Meeting', description: '', location: '', startTime: minutes(-10), endTime: minutes(50), needsVolunteers: false, checkInEnabled: true, ...extra });
   await setDoc(doc(db, 'events/open'), ev({ needsVolunteers: true }));
@@ -110,12 +115,19 @@ await check('phone merge with someone elses phone fails', assertFails(setDoc(doc
 await check('phone merge omitting roster fields (older app build) still works', assertSucceeds(setDoc(doc(signup('m5', { phone_number: '+15045550001' }), 'users/m5'), merge({ memberNumber: null, yearlyPoints: null, clubPoints: null, duesPaid: false, createdAt: serverTimestamp() }))));
 await check('merge cannot grant admin', assertFails(setDoc(doc(signup('m8', { phone_number: '+15045550001' }), 'users/m8'), merge({ role: 'admin' }))));
 
-// Email accounts are never trusted to claim a roster record (the address may
-// not be verified) — an admin merges them instead.
-await check('email merge is refused (matching email, roster values)', assertFails(setDoc(doc(signup('m6', { email: 'pat@x.com' }), 'users/m6'), merge())));
-await check('email merge is refused even with email_verified', assertFails(setDoc(doc(signup('m7', { email: 'pat@x.com', email_verified: true }), 'users/m7'), merge())));
-await check('email account cannot read a placeholder by matching email', assertFails(getDoc(doc(signup('e1', { email: 'sam@x.com' }), 'users/imported_6_Sam'))));
-await check('email account cannot delete a placeholder by matching email', assertFails(deleteDoc(doc(signup('e2', { email: 'sam@x.com' }), 'users/imported_6_Sam'))));
+// An unverified email is never trusted to claim a roster record (Firebase
+// attaches it before proving the person owns it) — an admin merges those
+// instead. A *verified* email (email_verified == true) is trusted the same
+// way a verified phone number already is.
+await check('email merge is refused without email_verified', assertFails(setDoc(doc(signup('m6', { email: 'pat@x.com' }), 'users/m6'), merge())));
+await check('verified email merge carries the roster values', assertSucceeds(setDoc(doc(signup('m7', { email: 'pat@x.com', email_verified: true }), 'users/m7'), merge())));
+await check('verified email merge cannot inflate points', assertFails(setDoc(doc(signup('m7b', { email: 'pat@x.com', email_verified: true }), 'users/m7b'), merge({ yearlyPoints: 999 }))));
+await check('verified email merge with someone elses email fails', assertFails(setDoc(doc(signup('m7c', { email: 'nope@x.com', email_verified: true }), 'users/m7c'), merge())));
+await check('verified email merge cannot grant admin', assertFails(setDoc(doc(signup('m7d', { email: 'pat@x.com', email_verified: true }), 'users/m7d'), merge({ role: 'admin' }))));
+await check('email account cannot read a placeholder by matching email without email_verified', assertFails(getDoc(doc(signup('e1', { email: 'alex@x.com' }), 'users/imported_8_Alex'))));
+await check('email account cannot delete a placeholder by matching email without email_verified', assertFails(deleteDoc(doc(signup('e2', { email: 'alex@x.com' }), 'users/imported_8_Alex'))));
+await check('verified email account can read its placeholder by matching email', assertSucceeds(getDoc(doc(signup('e1b', { email: 'alex@x.com', email_verified: true }), 'users/imported_8_Alex'))));
+await check('verified email account can delete the placeholder it claimed', assertSucceeds(deleteDoc(doc(signup('e2b', { email: 'alex@x.com', email_verified: true }), 'users/imported_8_Alex'))));
 
 // A phone-verified signup finds its roster placeholder with a *query*, not a
 // direct get — make sure the rules allow the query the app actually runs.
@@ -133,6 +145,13 @@ await check('phone merge + placeholder delete as one atomic batch', (async () =>
   const batch = writeBatch(db);
   batch.set(doc(db, 'users/m9'), plain({ status: 'approved', mergedFromId: 'imported_7_Kim', createdAt: joined, ...ROSTER }));
   batch.delete(doc(db, 'users/imported_7_Kim'));
+  await assertSucceeds(batch.commit());
+})());
+await check('verified email merge + placeholder delete as one atomic batch', (async () => {
+  const db = signup('m10', { email: 'jordan@x.com', email_verified: true });
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'users/m10'), plain({ email: 'jordan@x.com', status: 'approved', mergedFromId: 'imported_9_Jordan', createdAt: joined, ...ROSTER }));
+  batch.delete(doc(db, 'users/imported_9_Jordan'));
   await assertSucceeds(batch.commit());
 })());
 
@@ -215,6 +234,15 @@ await check('admin deletes an event with its slots and secret in one batch', (as
 })());
 await check('member cannot create an event', assertFails(setDoc(doc(mdb, 'events/hack'), { title: 'x', startTime: minutes(1), endTime: minutes(2) })));
 await check('member cannot delete an event', assertFails(deleteDoc(doc(mdb, 'events/open'))));
+
+// ---- config/app (join code) -----------------------------------------------
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'config/app'), { joinCode: 'STEAM2026' });
+});
+await check('signed-out can read the join code', assertSucceeds(getDoc(doc(env.unauthenticatedContext().firestore(), 'config/app'))));
+await check('a member can read the join code', assertSucceeds(getDoc(doc(mdb, 'config/app'))));
+await check('a member cannot change the join code', assertFails(setDoc(doc(mdb, 'config/app'), { joinCode: 'HACKED' })));
+await check('an admin can change the join code', assertSucceeds(setDoc(doc(adb, 'config/app'), { joinCode: 'NEWCODE' })));
 
 // ---- storage -------------------------------------------------------------
 const mst = member.storage();
