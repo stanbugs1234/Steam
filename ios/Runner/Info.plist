@@ -63,6 +63,13 @@
 	     on every TestFlight/App Store upload. -->
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
+	<!-- Required for FCM/APNs: lets the app receive silent remote-notification
+	     pushes (used for background data refresh triggered by push) in
+	     addition to visible alert/badge/sound pushes. -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

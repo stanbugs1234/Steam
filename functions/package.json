@@ -1,0 +1,20 @@
+{
+  "name": "steam-functions",
+  "private": true,
+  "type": "module",
+  "description": "Server-side Cloud Functions for the STEAM Club app — push notifications triggered by Firestore writes.",
+  "main": "index.mjs",
+  "engines": {
+    "node": "22"
+  },
+  "scripts": {
+    "test": "node test/triggers.test.mjs"
+  },
+  "dependencies": {
+    "firebase-admin": "^13.10.0",
+    "firebase-functions": "^7.4.0"
+  },
+  "devDependencies": {
+    "firebase-functions-test": "^3.5.0"
+  }
+}

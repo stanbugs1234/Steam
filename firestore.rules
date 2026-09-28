@@ -216,6 +216,13 @@ service cloud.firestore {
         // nothing: it removes their point, and re-creating needs the secret.
         allow delete: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
       }
+
+      // This device's push-notification token. Doc id is the token itself.
+      // Owner-only — a Cloud Function reads/writes these via the Admin SDK,
+      // which isn't subject to rules at all.
+      match /fcmTokens/{token} {
+        allow read, write: if isSignedIn() && request.auth.uid == uid;
+      }
     }
 
     // Lets an admin count check-ins for an event across all members.

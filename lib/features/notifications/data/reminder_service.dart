@@ -14,6 +14,11 @@ const _reminderLead = Duration(hours: 24);
 // safe stand-in for "this reminder is about the event as a whole."
 const _eventSentinel = '_event';
 
+const _alertsChannelId = 'club_alerts';
+const _alertsChannelName = 'Club alerts';
+const _alertsChannelDescription =
+    'New events, news posts, and volunteer openings other members or admins post.';
+
 /// Schedules and cancels on-device reminders for upcoming events and for
 /// volunteer shifts a member has personally signed up for. Mobile-only — matches the
 /// `!kIsWeb && (Platform.isIOS || Platform.isAndroid)` guard already used for
@@ -69,6 +74,28 @@ class ReminderService {
         .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
         ?.requestPermissions(alert: true, badge: true, sound: true);
     return granted ?? false;
+  }
+
+  /// Shows an alert immediately — for a push notification that arrives while
+  /// the app is in the foreground, when the OS won't display it on its own.
+  /// A stable [id] lets a repeat of the same alert replace rather than stack.
+  Future<void> showNow({required int id, required String title, required String body}) async {
+    if (!_supported) return;
+    await _ensureInitialized();
+    if (!_initialized) return;
+
+    await _plugin.show(
+      id: id,
+      title: title,
+      body: body,
+      notificationDetails: const NotificationDetails(
+        android: AndroidNotificationDetails(
+          _alertsChannelId,
+          _alertsChannelName,
+          channelDescription: _alertsChannelDescription,
+        ),
+      ),
+    );
   }
 
   Future<void> scheduleReminder({

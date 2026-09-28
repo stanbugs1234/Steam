@@ -244,6 +244,16 @@ await check('a member can read the join code', assertSucceeds(getDoc(doc(mdb, 'c
 await check('a member cannot change the join code', assertFails(setDoc(doc(mdb, 'config/app'), { joinCode: 'HACKED' })));
 await check('an admin can change the join code', assertSucceeds(setDoc(doc(adb, 'config/app'), { joinCode: 'NEWCODE' })));
 
+// ---- users/{uid}/fcmTokens (push notification tokens) --------------------
+await env.withSecurityRulesDisabled(async (ctx) => {
+  await setDoc(doc(ctx.firestore(), 'users/member2/fcmTokens/tok2'), { platform: 'android', updatedAt: Timestamp.now() });
+});
+await check('member writes own fcm token', assertSucceeds(setDoc(doc(mdb, 'users/member1/fcmTokens/tok1'), { platform: 'ios', updatedAt: serverTimestamp() })));
+await check('member reads own fcm token', assertSucceeds(getDoc(doc(mdb, 'users/member1/fcmTokens/tok1'))));
+await check('member cannot write another members fcm token', assertFails(setDoc(doc(mdb, 'users/member2/fcmTokens/tok3'), { platform: 'ios', updatedAt: serverTimestamp() })));
+await check('member cannot read another members fcm token', assertFails(getDoc(doc(mdb, 'users/member2/fcmTokens/tok2'))));
+await check('member deletes own fcm token', assertSucceeds(deleteDoc(doc(mdb, 'users/member1/fcmTokens/tok1'))));
+
 // ---- storage -------------------------------------------------------------
 const mst = member.storage();
 const pst = pending.storage();

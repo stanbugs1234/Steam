@@ -6,6 +6,7 @@ import '../features/directory/presentation/directory_list_screen.dart';
 import '../features/directory/presentation/my_profile_screen.dart';
 import '../features/events/presentation/events_screen.dart';
 import '../features/home/presentation/home_dashboard_screen.dart';
+import '../features/notifications/domain/fcm_sync.dart';
 import '../features/notifications/domain/reminder_sync.dart';
 import '../features/volunteering/presentation/my_commitments_screen.dart';
 
@@ -40,6 +41,10 @@ class _HomeShellState extends ConsumerState<HomeShell> {
     // Keeps volunteer-shift reminders on this device matching the member's
     // current sign-ups (see reminder_sync.dart).
     ref.watch(reminderSyncProvider);
+    // Keeps this device registered for push notifications and routes a
+    // tapped one to the right screen (see fcm_sync.dart).
+    ref.watch(fcmSyncProvider);
+    ref.watch(fcmMessageHandlingProvider);
 
     return Scaffold(
       body: IndexedStack(
