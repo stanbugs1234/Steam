@@ -31,7 +31,7 @@ final currentUidProvider = Provider<String?>((ref) {
 /// or null if signed out / profile not created yet.
 final currentAppUserProvider = StreamProvider<AppUser?>((ref) {
   final authState = ref.watch(authStateProvider);
-  final user = authState.value;
+  final user = authState.valueOrNull;
   if (user == null) return Stream.value(null);
   return _watchUserResilient(ref.watch(userRepositoryProvider), user.uid);
 });

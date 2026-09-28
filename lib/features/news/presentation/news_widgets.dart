@@ -14,7 +14,7 @@ import '../../sharing/share_sheet.dart';
 void shareNewsPost(BuildContext context, WidgetRef ref, NewsPost post) {
   final event = post.eventId == null
       ? null
-      : ref.read(eventsProvider).value?.firstWhereOrNull((e) => e.id == post.eventId);
+      : ref.read(eventsProvider).valueOrNull?.firstWhereOrNull((e) => e.id == post.eventId);
   showShareSheet(context, ShareContent.fromPost(post, event: event));
 }
 

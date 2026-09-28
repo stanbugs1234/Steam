@@ -21,7 +21,7 @@ final checkInCountProvider = FutureProvider.autoDispose.family<int, String>((ref
 
 /// The signed-in member's check-in history, newest first.
 final myCheckInsProvider = StreamProvider<List<AttendanceRecord>>((ref) {
-  final myUid = ref.watch(currentAppUserProvider).value?.uid;
+  final myUid = ref.watch(currentAppUserProvider).valueOrNull?.uid;
   if (myUid == null) return const Stream.empty();
   return ref.watch(attendanceRepositoryProvider).watchMyCheckIns(myUid);
 });
@@ -41,7 +41,7 @@ class PointsSummary {
 }
 
 final myPointsSummaryProvider = Provider<PointsSummary>((ref) {
-  final me = ref.watch(currentAppUserProvider).value;
-  final checkIns = ref.watch(myCheckInsProvider).value ?? const <AttendanceRecord>[];
+  final me = ref.watch(currentAppUserProvider).valueOrNull;
+  final checkIns = ref.watch(myCheckInsProvider).valueOrNull ?? const <AttendanceRecord>[];
   return PointsSummary(rosterPoints: me?.yearlyPoints ?? 0, checkIns: checkIns);
 });

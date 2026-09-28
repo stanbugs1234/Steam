@@ -28,7 +28,7 @@ Future<void> confirmAndDeleteAccount({
   // Only approved members can read these lists (and only they can be admins or
   // hold volunteer slots), so don't ask the database on behalf of anyone else.
   final admins = me.isAdmin
-      ? (ref.read(approvedMembersProvider).value ?? const <AppUser>[]).where((m) => m.isAdmin).length
+      ? (ref.read(approvedMembersProvider).valueOrNull ?? const <AppUser>[]).where((m) => m.isAdmin).length
       : 0;
 
   if (me.isAdmin && admins <= 1) {

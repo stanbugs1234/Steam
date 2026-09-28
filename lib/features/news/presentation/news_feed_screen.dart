@@ -29,7 +29,7 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
   @override
   Widget build(BuildContext context) {
     final feedAsync = ref.watch(newsFeedProvider);
-    final isAdmin = ref.watch(currentAppUserProvider).value?.isAdmin ?? false;
+    final isAdmin = ref.watch(currentAppUserProvider).valueOrNull?.isAdmin ?? false;
 
     return Scaffold(
       appBar: AppBar(title: const Text('News')),

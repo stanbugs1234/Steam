@@ -25,7 +25,7 @@ class EventVolunteerProgress {
 /// Aggregate spot counts across all of an event's volunteer slots, or null
 /// if the event has no slots yet.
 final eventVolunteerProgressProvider = Provider.family<EventVolunteerProgress?, String>((ref, eventId) {
-  final slots = ref.watch(eventSlotsProvider(eventId)).value;
+  final slots = ref.watch(eventSlotsProvider(eventId)).valueOrNull;
   if (slots == null || slots.isEmpty) return null;
   return EventVolunteerProgress(
     filled: slots.fold(0, (sum, s) => sum + s.signedUpUserIds.length),
@@ -132,7 +132,7 @@ class VolunteerRecord {
 /// for, newest first. Hours match what [volunteerHoursProvider] counts (once
 /// per event, however many of its slots they took).
 final myVolunteerRecordProvider = Provider<AsyncValue<List<VolunteerRecord>>>((ref) {
-  final myUid = ref.watch(currentAppUserProvider).value?.uid;
+  final myUid = ref.watch(currentAppUserProvider).valueOrNull?.uid;
   return ref.watch(pastVolunteerEventsProvider).whenData((past) {
     if (myUid == null) return const <VolunteerRecord>[];
     final records = <VolunteerRecord>[];
@@ -153,8 +153,8 @@ final myVolunteerRecordProvider = Provider<AsyncValue<List<VolunteerRecord>>>((r
 /// All approved members with at least one volunteer hour, ranked highest
 /// first.
 final volunteerLeaderboardProvider = Provider<List<LeaderboardEntry>>((ref) {
-  final hours = ref.watch(volunteerHoursProvider).value ?? const {};
-  final members = ref.watch(approvedMembersProvider).value ?? const [];
+  final hours = ref.watch(volunteerHoursProvider).valueOrNull ?? const {};
+  final members = ref.watch(approvedMembersProvider).valueOrNull ?? const [];
 
   final entries = members
       .where((m) => (hours[m.uid] ?? 0) > 0)
@@ -176,7 +176,7 @@ final topVolunteerUidsProvider = Provider<Set<String>>((ref) {
 /// and excluding them keeps this bounded to the small, roughly-constant set
 /// of upcoming events instead of the club's entire event history.
 final myCommitmentsProvider = Provider<AsyncValue<List<MyCommitment>>>((ref) {
-  final myUid = ref.watch(currentAppUserProvider).value?.uid;
+  final myUid = ref.watch(currentAppUserProvider).valueOrNull?.uid;
   final eventsAsync = ref.watch(eventsProvider);
   final now = DateTime.now();
 

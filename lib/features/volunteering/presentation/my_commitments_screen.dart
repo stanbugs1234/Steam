@@ -53,7 +53,7 @@ class MyCommitmentsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final commitmentsAsync = ref.watch(myCommitmentsProvider);
     final eventsAsync = ref.watch(eventsProvider);
-    final myUid = ref.watch(currentAppUserProvider).value?.uid;
+    final myUid = ref.watch(currentAppUserProvider).valueOrNull?.uid;
     final newEventIds = ref.watch(newVolunteerEventIdsProvider);
     final now = DateTime.now();
 
@@ -62,7 +62,7 @@ class MyCommitmentsScreen extends ConsumerWidget {
       body: commitmentsAsync.when(
         data: (commitments) {
           final myEventIds = {for (final c in commitments) c.event.id};
-          final opportunities = (eventsAsync.value ?? const <ClubEvent>[])
+          final opportunities = (eventsAsync.valueOrNull ?? const <ClubEvent>[])
               .where((e) => e.needsVolunteers && e.endTime.isAfter(now) && !myEventIds.contains(e.id))
               .sortedBy((e) => e.startTime);
 

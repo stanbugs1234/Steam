@@ -53,8 +53,8 @@ class NewsDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final feedAsync = ref.watch(newsFeedProvider);
-    final isAdmin = ref.watch(currentAppUserProvider).value?.isAdmin ?? false;
-    final post = feedAsync.value?.firstWhereOrNull((p) => p.id == postId);
+    final isAdmin = ref.watch(currentAppUserProvider).valueOrNull?.isAdmin ?? false;
+    final post = feedAsync.valueOrNull?.firstWhereOrNull((p) => p.id == postId);
 
     return Scaffold(
       appBar: AppBar(
@@ -105,7 +105,7 @@ class _PostBody extends ConsumerWidget {
     final theme = Theme.of(context);
     final event = post.eventId == null
         ? null
-        : ref.watch(eventsProvider).value?.firstWhereOrNull((e) => e.id == post.eventId);
+        : ref.watch(eventsProvider).valueOrNull?.firstWhereOrNull((e) => e.id == post.eventId);
 
     return ListView(
       padding: const EdgeInsets.only(bottom: 32),

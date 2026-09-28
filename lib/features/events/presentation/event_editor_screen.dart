@@ -176,7 +176,7 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
           await eventRepo.updateEvent(eventId, fields);
         }
       } else {
-        final me = ref.read(currentAppUserProvider).value;
+        final me = ref.read(currentAppUserProvider).valueOrNull;
         final repo = ref.read(eventRepositoryProvider);
         final eventId = repo.newEventId();
         final event = ClubEvent(

@@ -18,7 +18,7 @@ class EditProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final user = ref.watch(currentAppUserProvider).value;
+    final user = ref.watch(currentAppUserProvider).valueOrNull;
     if (user == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Edit Profile')),
@@ -123,7 +123,7 @@ class _EditProfileFormState extends ConsumerState<_EditProfileForm> {
   @override
   Widget build(BuildContext context) {
     // Live copy, for the photo (it can change while this screen is open).
-    final user = ref.watch(currentAppUserProvider).value ?? _initialUser;
+    final user = ref.watch(currentAppUserProvider).valueOrNull ?? _initialUser;
     final theme = Theme.of(context);
     final dirty = _dirty;
 

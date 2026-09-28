@@ -56,7 +56,7 @@ class _AccountStatusViewState extends ConsumerState<AccountStatusView> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final me = ref.watch(currentAppUserProvider).value;
+    final me = ref.watch(currentAppUserProvider).valueOrNull;
     final submitted = [
       if (me != null && me.name.isNotEmpty) me.name,
       if (me != null && me.phone.isNotEmpty) formatPhoneNumber(me.phone),

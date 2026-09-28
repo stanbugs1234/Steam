@@ -157,10 +157,10 @@ class _ProfileBody extends ConsumerWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final points = ref.watch(myPointsSummaryProvider);
-    final hours = ref.watch(volunteerHoursProvider).value?[user.uid] ?? 0;
+    final hours = ref.watch(volunteerHoursProvider).valueOrNull?[user.uid] ?? 0;
     final isTopVolunteer = ref.watch(topVolunteerUidsProvider).contains(user.uid);
-    final pendingCount = user.isAdmin ? (ref.watch(pendingUsersProvider).value?.length ?? 0) : 0;
-    final version = ref.watch(_appVersionProvider).value;
+    final pendingCount = user.isAdmin ? (ref.watch(pendingUsersProvider).valueOrNull?.length ?? 0) : 0;
+    final version = ref.watch(_appVersionProvider).valueOrNull;
     final since = user.createdAt;
 
     final headline = [

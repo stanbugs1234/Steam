@@ -45,7 +45,7 @@ class _CheckInScannerScreenState extends ConsumerState<CheckInScannerScreen> {
       return;
     }
 
-    final events = ref.read(eventsProvider).value ?? const <ClubEvent>[];
+    final events = ref.read(eventsProvider).valueOrNull ?? const <ClubEvent>[];
     final event = events.firstWhereOrNull((e) => e.id == code.eventId);
     if (event == null || !event.checkInEnabled) {
       setState(() => _message = "This code isn't set up for check-in.");
@@ -74,7 +74,7 @@ class _CheckInScannerScreenState extends ConsumerState<CheckInScannerScreen> {
       return;
     }
 
-    final uid = ref.read(currentAppUserProvider).value?.uid;
+    final uid = ref.read(currentAppUserProvider).valueOrNull?.uid;
     if (uid == null) {
       if (mounted) setState(() => _busy = false);
       return;

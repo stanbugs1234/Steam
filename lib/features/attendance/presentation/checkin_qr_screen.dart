@@ -19,7 +19,7 @@ class CheckInQrScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final eventsAsync = ref.watch(eventsProvider);
-    final isAdmin = ref.watch(currentAppUserProvider).value?.isAdmin ?? false;
+    final isAdmin = ref.watch(currentAppUserProvider).valueOrNull?.isAdmin ?? false;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Check-In QR')),
@@ -32,7 +32,7 @@ class CheckInQrScreen extends ConsumerWidget {
                   return const Center(child: Text('Event not found.'));
                 }
                 final codeAsync = ref.watch(checkInCodeProvider(eventId));
-                final count = ref.watch(checkInCountProvider(eventId)).value;
+                final count = ref.watch(checkInCountProvider(eventId)).valueOrNull;
                 return Center(
                   child: Padding(
                     padding: const EdgeInsets.all(24),

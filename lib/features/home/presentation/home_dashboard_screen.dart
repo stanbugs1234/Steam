@@ -36,7 +36,7 @@ class HomeDashboardScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final appUser = ref.watch(currentAppUserProvider).value;
+    final appUser = ref.watch(currentAppUserProvider).valueOrNull;
     final isAdmin = appUser?.isAdmin ?? false;
     final isTopVolunteer = appUser != null && ref.watch(topVolunteerUidsProvider).contains(appUser.uid);
     final eventsAsync = ref.watch(eventsProvider);
@@ -56,7 +56,7 @@ class HomeDashboardScreen extends ConsumerWidget {
 
     final firstName = (appUser?.name.trim().isNotEmpty ?? false) ? appUser!.name.trim().split(' ').first : null;
 
-    final upcomingEvents = (eventsAsync.value ?? const [])
+    final upcomingEvents = (eventsAsync.valueOrNull ?? const [])
         .where((e) => e.endTime.isAfter(now))
         .sortedBy((e) => e.startTime);
     final nextEvent = upcomingEvents.firstOrNull;
@@ -64,16 +64,16 @@ class HomeDashboardScreen extends ConsumerWidget {
     final nextEventProgress =
         nextEvent != null && nextEvent.needsVolunteers ? ref.watch(eventVolunteerProgressProvider(nextEvent.id)) : null;
 
-    final upcomingCommitments = (commitmentsAsync.value ?? const [])
+    final upcomingCommitments = (commitmentsAsync.valueOrNull ?? const [])
         .where((c) => c.event.endTime.isAfter(now))
         .sortedBy((c) => c.event.startTime);
 
     // Only admins are allowed to query pending users — security rules deny
     // this query outright for everyone else, so only watch it when it can
     // actually succeed.
-    final pendingUsers = isAdmin ? (ref.watch(pendingUsersProvider).value ?? const <AppUser>[]) : const <AppUser>[];
+    final pendingUsers = isAdmin ? (ref.watch(pendingUsersProvider).valueOrNull ?? const <AppUser>[]) : const <AppUser>[];
 
-    final recentPosts = (newsAsync.value ?? const []).take(3).toList();
+    final recentPosts = (newsAsync.valueOrNull ?? const []).take(3).toList();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Home')),

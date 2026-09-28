@@ -176,7 +176,7 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final membersAsync = ref.watch(approvedMembersProvider);
-    final viewer = ref.watch(currentAppUserProvider).value;
+    final viewer = ref.watch(currentAppUserProvider).valueOrNull;
     final topVolunteerUids = ref.watch(topVolunteerUidsProvider);
     final colorScheme = Theme.of(context).colorScheme;
 

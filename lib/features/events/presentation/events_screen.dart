@@ -115,9 +115,9 @@ class _EventsScreenState extends ConsumerState<EventsScreen>
   @override
   Widget build(BuildContext context) {
     final eventsAsync = ref.watch(eventsProvider);
-    final isAdmin = ref.watch(currentAppUserProvider).value?.isAdmin ?? false;
+    final isAdmin = ref.watch(currentAppUserProvider).valueOrNull?.isAdmin ?? false;
     final myEventIds = <String>{
-      for (final c in ref.watch(myCommitmentsProvider).value ?? const <MyCommitment>[]) c.event.id,
+      for (final c in ref.watch(myCommitmentsProvider).valueOrNull ?? const <MyCommitment>[]) c.event.id,
     };
     final now = widget.clock();
 

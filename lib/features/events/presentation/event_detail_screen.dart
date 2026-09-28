@@ -50,7 +50,7 @@ class EventDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final eventsAsync = ref.watch(eventsProvider);
-    final isAdmin = ref.watch(currentAppUserProvider).value?.isAdmin ?? false;
+    final isAdmin = ref.watch(currentAppUserProvider).valueOrNull?.isAdmin ?? false;
 
     return Scaffold(
       appBar: AppBar(

@@ -83,7 +83,7 @@ class VolunteerSlotsAdminScreen extends ConsumerWidget {
           if (slots.isEmpty) {
             return const EmptyState(icon: Icons.volunteer_activism_outlined, message: 'No slots yet. Tap + to add one.');
           }
-          final members = membersAsync.value ?? const [];
+          final members = membersAsync.valueOrNull ?? const [];
           return ListView.separated(
             padding: const EdgeInsets.all(12),
             itemCount: slots.length,

@@ -106,7 +106,7 @@ class _NewsEditorScreenState extends ConsumerState<NewsEditorScreen> {
           'eventId': _eventId,
         });
       } else {
-        final me = ref.read(currentAppUserProvider).value;
+        final me = ref.read(currentAppUserProvider).valueOrNull;
         await ref
             .read(newsRepositoryProvider)
             .createPost(
@@ -170,7 +170,7 @@ class _NewsEditorScreenState extends ConsumerState<NewsEditorScreen> {
   /// upcoming events, plus the one already attached when editing.
   Widget _buildEventPicker(BuildContext context) {
     final now = DateTime.now();
-    final events = (ref.watch(eventsProvider).value ?? const [])
+    final events = (ref.watch(eventsProvider).valueOrNull ?? const [])
         .where((e) => e.endTime.isAfter(now) || e.id == _eventId)
         .sortedBy((e) => e.startTime);
     // Drop a stale link (event deleted) rather than feeding the dropdown a

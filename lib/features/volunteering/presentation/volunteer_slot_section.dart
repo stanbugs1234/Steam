@@ -26,7 +26,7 @@ class VolunteerSlotSection extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final eventId = event.id;
     final slotsAsync = ref.watch(eventSlotsProvider(eventId));
-    final appUser = ref.watch(currentAppUserProvider).value;
+    final appUser = ref.watch(currentAppUserProvider).valueOrNull;
     final isAdmin = appUser?.isAdmin ?? false;
     final colorScheme = Theme.of(context).colorScheme;
     // uid -> member, so each task can list *who* signed up rather than just how
