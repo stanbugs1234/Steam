@@ -7,12 +7,15 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 const _channelId = 'volunteer_reminders';
-const _channelName = 'Volunteer reminders';
-const _channelDescription = 'Reminders for volunteer shifts you signed up for.';
+const _channelName = 'Event reminders';
+const _channelDescription = 'Reminders for upcoming events and volunteer shifts you signed up for.';
 const _reminderLead = Duration(hours: 24);
+// A slot id can never legitimately equal this (Firestore doc ids), so it's a
+// safe stand-in for "this reminder is about the event as a whole."
+const _eventSentinel = '_event';
 
-/// Schedules and cancels on-device reminders for volunteer shifts a member
-/// has personally signed up for. Mobile-only — matches the
+/// Schedules and cancels on-device reminders for upcoming events and for
+/// volunteer shifts a member has personally signed up for. Mobile-only — matches the
 /// `!kIsWeb && (Platform.isIOS || Platform.isAndroid)` guard already used for
 /// "Add to Contacts" in member_detail_screen.dart, since neither local
 /// notifications nor a meaningful permission model exist on web/desktop here.
@@ -68,11 +71,11 @@ class ReminderService {
     return granted ?? false;
   }
 
-  Future<void> scheduleVolunteerReminder({
+  Future<void> scheduleReminder({
     required String eventId,
-    required String slotId,
+    String? slotId,
     required String eventTitle,
-    required String slotLabel,
+    String? slotLabel,
     required DateTime eventStart,
   }) async {
     if (!_supported) return;
@@ -83,10 +86,11 @@ class ReminderService {
     await _ensureInitialized();
     if (!_initialized) return;
 
+    final isShift = slotId != null;
     await _plugin.zonedSchedule(
-      id: stableNotificationId(eventId, slotId),
-      title: 'Volunteer shift tomorrow',
-      body: '$eventTitle · $slotLabel',
+      id: stableNotificationId(eventId, slotId ?? _eventSentinel),
+      title: isShift ? 'Volunteer shift tomorrow' : 'Event tomorrow',
+      body: isShift ? '$eventTitle · $slotLabel' : eventTitle,
       scheduledDate: tz.TZDateTime.from(fireTime, tz.local),
       notificationDetails: const NotificationDetails(
         android: AndroidNotificationDetails(
@@ -105,7 +109,7 @@ class ReminderService {
   /// one — a shift the member left, an event or slot an admin deleted, or all
   /// of them when reminders are switched off. Reminders are local to a device,
   /// so this is also what restores them after a reinstall or on a new phone.
-  Future<void> syncVolunteerReminders(List<ReminderTarget> targets) async {
+  Future<void> syncReminders(List<ReminderTarget> targets) async {
     if (!_supported) return;
     await _ensureInitialized();
     if (!_initialized) return;
@@ -119,7 +123,7 @@ class ReminderService {
       await _plugin.cancel(id: id);
     }
     for (final t in targets) {
-      await scheduleVolunteerReminder(
+      await scheduleReminder(
         eventId: t.eventId,
         slotId: t.slotId,
         eventTitle: t.eventTitle,
@@ -149,7 +153,7 @@ DateTime? reminderFireTime(DateTime eventStart, {Duration lead = _reminderLead})
 /// later purely from those two strings, without keeping any extra state.
 /// Uses FNV-1a rather than String.hashCode, which Dart does not guarantee
 /// to be stable across SDK versions or platforms.
-int stableNotificationId(String eventId, String slotId) {
+int stableNotificationId(String eventId, [String slotId = _eventSentinel]) {
   const fnvPrime = 0x01000193;
   var hash = 0x811c9dc5;
   for (final code in '$eventId|$slotId'.codeUnits) {
@@ -159,23 +163,25 @@ int stableNotificationId(String eventId, String slotId) {
   return hash;
 }
 
-/// One volunteer shift a member should be reminded about.
+/// One thing a member should be reminded about: either a volunteer shift
+/// they personally signed up for ([slotId] set), or an upcoming event in
+/// general ([slotId] null).
 class ReminderTarget {
   const ReminderTarget({
     required this.eventId,
-    required this.slotId,
+    this.slotId,
     required this.eventTitle,
-    required this.slotLabel,
+    this.slotLabel,
     required this.eventStart,
-  });
+  }) : assert(slotId == null || slotLabel != null, 'a shift reminder needs a slot label');
 
   final String eventId;
-  final String slotId;
+  final String? slotId;
   final String eventTitle;
-  final String slotLabel;
+  final String? slotLabel;
   final DateTime eventStart;
 
-  int get id => stableNotificationId(eventId, slotId);
+  int get id => stableNotificationId(eventId, slotId ?? _eventSentinel);
 }
 
 /// The scheduled reminder ids that should be cancelled because nothing wants

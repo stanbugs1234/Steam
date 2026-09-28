@@ -62,4 +62,16 @@ void main() {
       expect(target.id, stableNotificationId('e1', 's1'));
     });
   });
+
+  group('ReminderTarget without a slot (a general event reminder)', () {
+    test("doesn't collide with a real slot id, and matches stableNotificationId's default", () {
+      final target = ReminderTarget(
+        eventId: 'e1',
+        eventTitle: 'Book Fair',
+        eventStart: DateTime.now().add(const Duration(days: 3)),
+      );
+      expect(target.id, stableNotificationId('e1'));
+      expect(target.id, isNot(stableNotificationId('e1', 's1')));
+    });
+  });
 }
