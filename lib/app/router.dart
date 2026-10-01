@@ -85,7 +85,8 @@ String? resolveRedirect({
       location == '/events/new' ||
       location.endsWith('/edit') ||
       location.endsWith('/slots') ||
-      location.endsWith('/qr');
+      location.endsWith('/qr') ||
+      location.endsWith('/duplicate');
   if (adminOnly && !user.isAdmin) {
     return '/home';
   }
@@ -139,6 +140,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/events/:id/edit',
         builder: (context, state) => EventEditorScreen(eventId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/events/:id/duplicate',
+        builder: (context, state) => EventEditorScreen(duplicateFromId: state.pathParameters['id']!),
       ),
       GoRoute(
         path: '/events/:id/slots',

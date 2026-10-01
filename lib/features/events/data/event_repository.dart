@@ -29,9 +29,18 @@ class EventRepository {
   /// Creates an event and its single volunteer slot as one atomic write, so a
   /// failure can't leave an event marked "needs volunteers" with no slot.
   Future<void> createEventWithSlot(ClubEvent event, VolunteerSlot slot) {
+    return createEventWithSlots(event, [slot]);
+  }
+
+  /// Creates an event and any number of volunteer slots as one atomic write —
+  /// used when duplicating an event that has more than one slot, where
+  /// createEventWithSlot's single-slot shape doesn't fit.
+  Future<void> createEventWithSlots(ClubEvent event, List<VolunteerSlot> slots) {
     final batch = _firestore.batch();
     batch.set(_eventsRef.doc(event.id), event.toFirestore());
-    batch.set(_slotsRef(event.id).doc(slot.id), slot.toFirestore());
+    for (final slot in slots) {
+      batch.set(_slotsRef(event.id).doc(slot.id), slot.toFirestore());
+    }
     return batch.commit();
   }
 

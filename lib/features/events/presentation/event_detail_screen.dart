@@ -81,6 +81,11 @@ class EventDetailScreen extends ConsumerWidget {
                       onPressed: () => context.push('/events/${event.id}/edit'),
                     ),
                     IconButton(
+                      icon: const Icon(Icons.copy_outlined),
+                      tooltip: 'Duplicate event',
+                      onPressed: () => context.push('/events/${event.id}/duplicate'),
+                    ),
+                    IconButton(
                       icon: const Icon(Icons.delete_outline),
                       tooltip: 'Delete event',
                       onPressed: () async {

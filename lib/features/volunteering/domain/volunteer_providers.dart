@@ -16,6 +16,13 @@ final eventSlotsProvider = StreamProvider.family<List<VolunteerSlot>, String>((r
   return ref.watch(volunteerRepositoryProvider).watchSlots(eventId);
 });
 
+/// A one-time read of an event's slots — for duplicating an event, where we
+/// want a snapshot to copy, not a live subscription to the *source* event
+/// (which keeps running after this screen opens).
+final eventSlotsOnceProvider = FutureProvider.family<List<VolunteerSlot>, String>((ref, eventId) {
+  return ref.watch(volunteerRepositoryProvider).getSlotsOnce(eventId);
+});
+
 class EventVolunteerProgress {
   final int filled;
   final int capacity;

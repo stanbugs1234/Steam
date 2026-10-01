@@ -104,6 +104,7 @@ void main() {
         '/news/n1/edit',
         '/events/e1/slots',
         '/events/e1/qr',
+        '/events/e1/duplicate',
       ]) {
         expect(_go(r, appUser: member), '/home', reason: r);
       }
@@ -113,7 +114,15 @@ void main() {
   group('approved admin', () {
     final admin = _data(_user(role: UserRole.admin));
     test('can open admin-only screens', () {
-      for (final r in ['/admin/approvals', '/news/new', '/events/new', '/events/e1/edit', '/events/e1/slots', '/events/e1/qr']) {
+      for (final r in [
+        '/admin/approvals',
+        '/news/new',
+        '/events/new',
+        '/events/e1/edit',
+        '/events/e1/slots',
+        '/events/e1/qr',
+        '/events/e1/duplicate',
+      ]) {
         expect(_go(r, appUser: admin), isNull, reason: r);
       }
     });

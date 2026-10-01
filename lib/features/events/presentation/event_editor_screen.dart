@@ -15,11 +15,14 @@ import '../domain/event_providers.dart';
 import '../../../core/utils/friendly_error.dart';
 
 /// Create/edit form for an event. Pass [eventId] to edit an existing event,
-/// or leave it null to create a new one.
+/// [duplicateFromId] to prefill a new event from an existing one (for a
+/// different date), or leave both null to create a blank new one.
 class EventEditorScreen extends ConsumerStatefulWidget {
-  const EventEditorScreen({super.key, this.eventId});
+  const EventEditorScreen({super.key, this.eventId, this.duplicateFromId})
+      : assert(eventId == null || duplicateFromId == null, 'Pass eventId to edit, or duplicateFromId to duplicate — not both.');
 
   final String? eventId;
+  final String? duplicateFromId;
 
   @override
   ConsumerState<EventEditorScreen> createState() => _EventEditorScreenState();
@@ -43,7 +46,11 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
   bool _saving = false;
   String? _error;
 
+  bool _duplicatePrefilled = false;
+  List<VolunteerSlot> _duplicateSlots = const [];
+
   bool get _isEditing => widget.eventId != null;
+  bool get _isDuplicating => widget.duplicateFromId != null;
 
   static DateTime _roundToNextHour(DateTime dt) {
     final rounded = DateTime(dt.year, dt.month, dt.day, dt.hour + 1);
@@ -69,6 +76,22 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
     if (_slotsSynced) return;
     _slotsSynced = true;
     _existingSlots = slots;
+    if (slots.length == 1) {
+      _volunteersNeededCtrl.text = slots.first.capacity.toString();
+    }
+  }
+
+  void _syncFromDuplicate(ClubEvent source, List<VolunteerSlot> slots) {
+    if (_duplicatePrefilled) return;
+    _duplicatePrefilled = true;
+    _titleCtrl.text = source.title;
+    _descriptionCtrl.text = source.description;
+    _locationCtrl.text = source.location;
+    _start = source.startTime;
+    _end = source.endTime;
+    _needsVolunteers = source.needsVolunteers;
+    _checkInEnabled = source.checkInEnabled;
+    _duplicateSlots = slots;
     if (slots.length == 1) {
       _volunteersNeededCtrl.text = slots.first.capacity.toString();
     }
@@ -190,12 +213,23 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
           createdBy: me?.uid ?? '',
           checkInEnabled: _checkInEnabled,
         );
-        if (writeSingleSlot) {
+        if (_needsVolunteers && _duplicateSlots.length > 1) {
+          final freshSlots = [
+            for (final slot in _duplicateSlots)
+              VolunteerSlot(
+                id: volunteerRepo.newSlotId(eventId),
+                label: slot.label,
+                capacity: slot.capacity,
+                signedUpUserIds: const [],
+              ),
+          ];
+          await repo.createEventWithSlots(event, freshSlots);
+        } else if (writeSingleSlot) {
           await repo.createEventWithSlot(
             event,
             VolunteerSlot(
               id: volunteerRepo.newSlotId(eventId),
-              label: 'Volunteers',
+              label: _duplicateSlots.isNotEmpty ? _duplicateSlots.first.label : 'Volunteers',
               capacity: volunteersNeeded!,
               signedUpUserIds: const [],
             ),
@@ -238,12 +272,41 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
         error: (err, _) => Scaffold(appBar: AppBar(), body: ErrorState(message: 'Something went wrong.', error: err, onRetry: () => ref.invalidate(eventsProvider))),
       );
     }
+    if (_isDuplicating) {
+      final eventsAsync = ref.watch(eventsProvider);
+      final sourceSlotsAsync = ref.watch(eventSlotsOnceProvider(widget.duplicateFromId!));
+      return eventsAsync.when(
+        data: (events) {
+          final source = events.firstWhereOrNull((e) => e.id == widget.duplicateFromId);
+          if (source == null) {
+            return Scaffold(appBar: AppBar(), body: const Center(child: Text('Event not found.')));
+          }
+          return sourceSlotsAsync.when(
+            data: (slots) {
+              _syncFromDuplicate(source, slots);
+              return _buildForm(context);
+            },
+            loading: () => Scaffold(appBar: AppBar(), body: const Center(child: CircularProgressIndicator())),
+            error: (err, _) => Scaffold(
+              appBar: AppBar(),
+              body: ErrorState(
+                message: 'Something went wrong.',
+                error: err,
+                onRetry: () => ref.invalidate(eventSlotsOnceProvider(widget.duplicateFromId!)),
+              ),
+            ),
+          );
+        },
+        loading: () => Scaffold(appBar: AppBar(), body: const Center(child: CircularProgressIndicator())),
+        error: (err, _) => Scaffold(appBar: AppBar(), body: ErrorState(message: 'Something went wrong.', error: err, onRetry: () => ref.invalidate(eventsProvider))),
+      );
+    }
     return _buildForm(context);
   }
 
   Widget _buildForm(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_isEditing ? 'Edit Event' : 'New Event')),
+      appBar: AppBar(title: Text(_isDuplicating ? 'Duplicate Event' : _isEditing ? 'Edit Event' : 'New Event')),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
@@ -319,12 +382,16 @@ class _EventEditorScreenState extends ConsumerState<EventEditorScreen> {
                       ),
                       if (_needsVolunteers) ...[
                         const Divider(height: 1),
-                        if (_existingSlots.length > 1)
-                          const Padding(
-                            padding: EdgeInsets.fromLTRB(16, 12, 16, 16),
+                        if (_existingSlots.length > 1 || _duplicateSlots.length > 1)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                             child: Text(
-                              'This event already has multiple volunteer slots. '
-                              'Manage their headcounts individually from the event page.',
+                              _isDuplicating
+                                  ? "This event's ${_duplicateSlots.length} volunteer slots will be copied over: "
+                                      '${_duplicateSlots.map((s) => '${s.label} (${s.capacity})').join(', ')}. '
+                                      'You can adjust them after creating this event, from its event page.'
+                                  : 'This event already has multiple volunteer slots. '
+                                      'Manage their headcounts individually from the event page.',
                             ),
                           )
                         else
