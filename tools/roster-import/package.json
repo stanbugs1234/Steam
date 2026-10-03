@@ -1,0 +1,11 @@
+{
+  "name": "steam-roster-import",
+  "private": true,
+  "type": "module",
+  "description": "One-time import of member awards (Good Buddy, President's Award, Hall of Fame, Rookie of the Year) from the roster spreadsheet's award column into Firestore.",
+  "scripts": { "import": "node import.mjs" },
+  "dependencies": {
+    "csv-parse": "^5.6.0",
+    "firebase-admin": "^13.0.0"
+  }
+}

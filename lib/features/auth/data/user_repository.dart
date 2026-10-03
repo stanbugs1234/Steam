@@ -194,6 +194,22 @@ class UserRepository {
     return _usersRef.doc(uid).update({'clubPoints': points});
   }
 
+  Future<void> setGoodBuddyYears(String uid, List<String> years) {
+    return _usersRef.doc(uid).update({'goodBuddyYears': years});
+  }
+
+  Future<void> setPresidentsAwardYears(String uid, List<String> years) {
+    return _usersRef.doc(uid).update({'presidentsAwardYears': years});
+  }
+
+  Future<void> setHallOfFameYears(String uid, List<String> years) {
+    return _usersRef.doc(uid).update({'hallOfFameYears': years});
+  }
+
+  Future<void> setRookieOfTheYearYears(String uid, List<String> years) {
+    return _usersRef.doc(uid).update({'rookieOfTheYearYears': years});
+  }
+
   Future<void> updateProfile(String uid, Map<String, dynamic> fields) {
     return _usersRef.doc(uid).update(fields);
   }

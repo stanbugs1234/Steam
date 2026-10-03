@@ -17,7 +17,10 @@ const env = await initializeTestEnvironment({
 
 const minutes = (n) => Timestamp.fromDate(new Date(Date.now() + n * 60_000));
 const joined = Timestamp.fromDate(new Date('2019-03-10T12:00:00Z'));
-const ROSTER = { memberNumber: '77', yearlyPoints: 12, clubPoints: 30, duesPaid: true, isNewMember: false };
+const ROSTER = {
+  memberNumber: '77', yearlyPoints: 12, clubPoints: 30, duesPaid: true, isNewMember: false,
+  goodBuddyYears: ['2020'], hallOfFameYears: ['2019'],
+};
 const SECRET = 'a1b2c3d4e5f60718293a4b5c6d7e8f90';
 const bytes = new Uint8Array([1, 2, 3]);
 const OWN_PHOTO_URL = 'https://firebasestorage.googleapis.com/v0/b/steam-club-app.firebasestorage.app/o/profile_photos%2Fmember1.jpg?alt=media&token=abc';
@@ -75,10 +78,12 @@ await check('member cannot edit yearlyPoints', assertFails(updateDoc(doc(mdb, 'u
 await check('member cannot edit clubPoints', assertFails(updateDoc(doc(mdb, 'users/member1'), { clubPoints: 999 })));
 await check('member cannot set duesPaid', assertFails(updateDoc(doc(mdb, 'users/member1'), { duesPaid: true })));
 await check('member cannot set memberNumber', assertFails(updateDoc(doc(mdb, 'users/member1'), { memberNumber: '1' })));
+await check('member cannot grant self an award', assertFails(updateDoc(doc(mdb, 'users/member1'), { hallOfFameYears: ['2026'] })));
 await check('member cannot make self admin', assertFails(updateDoc(doc(mdb, 'users/member1'), { role: 'admin' })));
 await check('member cannot change status', assertFails(updateDoc(doc(mdb, 'users/member1'), { status: 'pending' })));
 await check('member cannot edit another member', assertFails(updateDoc(doc(mdb, 'users/member2'), { name: 'Hax' })));
 await check('admin sets member duesPaid + points', assertSucceeds(updateDoc(doc(adb, 'users/member2'), { duesPaid: true, yearlyPoints: 10, memberNumber: '9' })));
+await check('admin grants a member an award', assertSucceeds(updateDoc(doc(adb, 'users/member2'), { hallOfFameYears: ['2026'], goodBuddyYears: ['2024', '2026'] })));
 await check('member cannot delete another member', assertFails(deleteDoc(doc(mdb, 'users/member2'))));
 
 // ---- users: field validation (one bad value must not break everyone) ------
@@ -99,6 +104,7 @@ await check('pending signup cannot set yearlyPoints', assertFails(setDoc(doc(sig
 await check('pending signup cannot set clubPoints', assertFails(setDoc(doc(signup('s3'), 'users/s3'), plain({ clubPoints: 5 }))));
 await check('pending signup cannot set duesPaid', assertFails(setDoc(doc(signup('s4'), 'users/s4'), plain({ duesPaid: true }))));
 await check('pending signup cannot set memberNumber', assertFails(setDoc(doc(signup('s5'), 'users/s5'), plain({ memberNumber: '1' }))));
+await check('pending signup cannot grant self an award', assertFails(setDoc(doc(signup('s5b'), 'users/s5b'), plain({ hallOfFameYears: ['2026'] }))));
 await check('pending signup cannot backdate createdAt', assertFails(setDoc(doc(signup('s6'), 'users/s6'), plain({ createdAt: joined }))));
 await check('pending signup cannot add unknown fields', assertFails(setDoc(doc(signup('s7'), 'users/s7'), plain({ isAdmin: true }))));
 await check('pending signup cannot be admin', assertFails(setDoc(doc(signup('s8'), 'users/s8'), plain({ role: 'admin' }))));
@@ -114,6 +120,8 @@ await check('phone merge cannot invent dues paid when roster says unpaid', asser
 await check('phone merge with someone elses phone fails', assertFails(setDoc(doc(signup('m4', { phone_number: '+15045559999' }), 'users/m4'), merge())));
 await check('phone merge omitting roster fields (older app build) still works', assertSucceeds(setDoc(doc(signup('m5', { phone_number: '+15045550001' }), 'users/m5'), merge({ memberNumber: null, yearlyPoints: null, clubPoints: null, duesPaid: false, createdAt: serverTimestamp() }))));
 await check('merge cannot grant admin', assertFails(setDoc(doc(signup('m8', { phone_number: '+15045550001' }), 'users/m8'), merge({ role: 'admin' }))));
+await check('phone merge carries the roster awards', assertSucceeds(setDoc(doc(signup('m9b', { phone_number: '+15045550001' }), 'users/m9b'), merge())));
+await check('phone merge cannot invent an award the roster never recorded', assertFails(setDoc(doc(signup('m9c', { phone_number: '+15045550001' }), 'users/m9c'), merge({ hallOfFameYears: ['2019', '2026'] }))));
 
 // An unverified email is never trusted to claim a roster record (Firebase
 // attaches it before proving the person owns it) — an admin merges those

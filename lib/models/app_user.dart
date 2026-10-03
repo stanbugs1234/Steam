@@ -23,6 +23,10 @@ class AppUser {
   final String? memberNumber;
   final int? clubPoints;
   final int? yearlyPoints;
+  final List<String> goodBuddyYears;
+  final List<String> presidentsAwardYears;
+  final List<String> hallOfFameYears;
+  final List<String> rookieOfTheYearYears;
 
   const AppUser({
     required this.uid,
@@ -41,11 +45,17 @@ class AppUser {
     this.memberNumber,
     this.clubPoints,
     this.yearlyPoints,
+    this.goodBuddyYears = const [],
+    this.presidentsAwardYears = const [],
+    this.hallOfFameYears = const [],
+    this.rookieOfTheYearYears = const [],
   });
 
   bool get isApproved => status == UserStatus.approved;
   bool get isAdmin => role == UserRole.admin;
   int get kidCount => kids.length;
+  bool get hasAnyAward =>
+      goodBuddyYears.isNotEmpty || presidentsAwardYears.isNotEmpty || hallOfFameYears.isNotEmpty || rookieOfTheYearYears.isNotEmpty;
 
   /// Tolerant of wrongly-typed or missing fields: a member controls parts of
   /// their own document, and one malformed value must not make the directory,
@@ -68,12 +78,18 @@ class AppUser {
       memberNumber: data['memberNumber']?.toString(),
       clubPoints: _int(data['clubPoints']),
       yearlyPoints: _int(data['yearlyPoints']),
+      goodBuddyYears: _stringList(data['goodBuddyYears']),
+      presidentsAwardYears: _stringList(data['presidentsAwardYears']),
+      hallOfFameYears: _stringList(data['hallOfFameYears']),
+      rookieOfTheYearYears: _stringList(data['rookieOfTheYearYears']),
     );
   }
 
   static String? _string(Object? v) => v is String ? v : null;
 
   static int? _int(Object? v) => v is num ? v.toInt() : null;
+
+  static List<String> _stringList(Object? v) => v is List ? v.whereType<String>().toList() : const [];
 
   static List<ChildInfo> _kidsFromFirestore(Map<String, dynamic> data) {
     final kidsRaw = data['kids'];
@@ -118,6 +134,10 @@ class AppUser {
       'memberNumber': memberNumber,
       'clubPoints': clubPoints,
       'yearlyPoints': yearlyPoints,
+      'goodBuddyYears': goodBuddyYears,
+      'presidentsAwardYears': presidentsAwardYears,
+      'hallOfFameYears': hallOfFameYears,
+      'rookieOfTheYearYears': rookieOfTheYearYears,
     };
   }
 
@@ -135,6 +155,10 @@ class AppUser {
     String? memberNumber,
     int? clubPoints,
     int? yearlyPoints,
+    List<String>? goodBuddyYears,
+    List<String>? presidentsAwardYears,
+    List<String>? hallOfFameYears,
+    List<String>? rookieOfTheYearYears,
   }) {
     return AppUser(
       uid: uid,
@@ -153,6 +177,10 @@ class AppUser {
       memberNumber: memberNumber ?? this.memberNumber,
       clubPoints: clubPoints ?? this.clubPoints,
       yearlyPoints: yearlyPoints ?? this.yearlyPoints,
+      goodBuddyYears: goodBuddyYears ?? this.goodBuddyYears,
+      presidentsAwardYears: presidentsAwardYears ?? this.presidentsAwardYears,
+      hallOfFameYears: hallOfFameYears ?? this.hallOfFameYears,
+      rookieOfTheYearYears: rookieOfTheYearYears ?? this.rookieOfTheYearYears,
     );
   }
 }

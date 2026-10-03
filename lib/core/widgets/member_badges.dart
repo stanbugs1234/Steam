@@ -3,11 +3,16 @@ import 'package:flutter/material.dart';
 import '../../models/app_user.dart';
 import 'admin_badge.dart';
 import 'dues_paid_badge.dart';
+import 'good_buddy_badge.dart';
+import 'hall_of_fame_badge.dart';
 import 'new_member_badge.dart';
+import 'presidents_award_badge.dart';
+import 'rookie_of_the_year_badge.dart';
 import 'top_volunteer_badge.dart';
 
 /// The status pills for a member (Admin, Top Volunteer, New Member, Dues
-/// Paid), laid out in a wrapping row. Renders nothing if none apply.
+/// Paid, plus any awards), laid out in a wrapping row. Renders nothing if
+/// none apply.
 class MemberBadges extends StatelessWidget {
   const MemberBadges({super.key, required this.user, required this.isTopVolunteer, this.alignment = WrapAlignment.start});
 
@@ -16,7 +21,7 @@ class MemberBadges extends StatelessWidget {
   final WrapAlignment alignment;
 
   static bool hasAny(AppUser user, bool isTopVolunteer) =>
-      user.isAdmin || isTopVolunteer || user.isNewMember || user.duesPaid;
+      user.isAdmin || isTopVolunteer || user.isNewMember || user.duesPaid || user.hasAnyAward;
 
   @override
   Widget build(BuildContext context) {
@@ -30,6 +35,10 @@ class MemberBadges extends StatelessWidget {
         if (isTopVolunteer) const TopVolunteerBadge(),
         if (user.isNewMember) const NewMemberBadge(),
         if (user.duesPaid) const DuesPaidBadge(),
+        if (user.goodBuddyYears.isNotEmpty) const GoodBuddyBadge(),
+        if (user.presidentsAwardYears.isNotEmpty) const PresidentsAwardBadge(),
+        if (user.hallOfFameYears.isNotEmpty) const HallOfFameBadge(),
+        if (user.rookieOfTheYearYears.isNotEmpty) const RookieOfTheYearBadge(),
       ],
     );
   }

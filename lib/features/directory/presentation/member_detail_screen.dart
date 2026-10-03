@@ -16,7 +16,11 @@ import '../../../core/utils/phone_format.dart';
 import '../../../core/widgets/admin_badge.dart';
 import '../../../core/widgets/dues_paid_badge.dart';
 import '../../../core/widgets/error_state.dart';
+import '../../../core/widgets/good_buddy_badge.dart';
+import '../../../core/widgets/hall_of_fame_badge.dart';
 import '../../../core/widgets/new_member_badge.dart';
+import '../../../core/widgets/presidents_award_badge.dart';
+import '../../../core/widgets/rookie_of_the_year_badge.dart';
 import '../../../core/widgets/section_card.dart';
 import '../../../core/widgets/top_volunteer_badge.dart';
 import '../../../models/app_user.dart';
@@ -173,6 +177,11 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
     }
   }
 
+  /// Turns the comma-separated text an admin typed into the award-years
+  /// dialog into a clean list — e.g. "2023, 2024" -> ['2023', '2024'].
+  List<String> _parseYears(String? value) =>
+      (value ?? '').split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+
   @override
   Widget build(BuildContext context) {
     final membersAsync = ref.watch(approvedMembersProvider);
@@ -245,6 +254,22 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
                     if (member.duesPaid) ...[
                       const SizedBox(height: 6),
                       const DuesPaidBadge(),
+                    ],
+                    if (member.goodBuddyYears.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      const GoodBuddyBadge(),
+                    ],
+                    if (member.presidentsAwardYears.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      const PresidentsAwardBadge(),
+                    ],
+                    if (member.hallOfFameYears.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      const HallOfFameBadge(),
+                    ],
+                    if (member.rookieOfTheYearYears.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      const RookieOfTheYearBadge(),
                     ],
                     if (_supportsContacts) ...[
                       const SizedBox(height: 20),
@@ -411,6 +436,54 @@ class _MemberDetailScreenState extends ConsumerState<MemberDetailScreen> {
                         current: member.clubPoints?.toString(),
                         numeric: true,
                         save: (v) => ref.read(userRepositoryProvider).setClubPoints(member.uid, v == null ? null : int.parse(v)),
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      title: const Text('Good Buddy Award'),
+                      subtitle: Text(member.goodBuddyYears.isEmpty ? 'Not earned' : member.goodBuddyYears.join(', ')),
+                      trailing: const Icon(Icons.edit_outlined),
+                      onTap: () => _editRosterField(
+                        title: 'Good Buddy Award years (comma-separated)',
+                        current: member.goodBuddyYears.join(', '),
+                        numeric: false,
+                        save: (v) => ref.read(userRepositoryProvider).setGoodBuddyYears(member.uid, _parseYears(v)),
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      title: const Text("President's Award"),
+                      subtitle: Text(member.presidentsAwardYears.isEmpty ? 'Not earned' : member.presidentsAwardYears.join(', ')),
+                      trailing: const Icon(Icons.edit_outlined),
+                      onTap: () => _editRosterField(
+                        title: "President's Award years (comma-separated)",
+                        current: member.presidentsAwardYears.join(', '),
+                        numeric: false,
+                        save: (v) => ref.read(userRepositoryProvider).setPresidentsAwardYears(member.uid, _parseYears(v)),
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      title: const Text('Hall of Fame'),
+                      subtitle: Text(member.hallOfFameYears.isEmpty ? 'Not earned' : member.hallOfFameYears.join(', ')),
+                      trailing: const Icon(Icons.edit_outlined),
+                      onTap: () => _editRosterField(
+                        title: 'Hall of Fame years (comma-separated)',
+                        current: member.hallOfFameYears.join(', '),
+                        numeric: false,
+                        save: (v) => ref.read(userRepositoryProvider).setHallOfFameYears(member.uid, _parseYears(v)),
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    ListTile(
+                      title: const Text('Rookie of the Year'),
+                      subtitle: Text(member.rookieOfTheYearYears.isEmpty ? 'Not earned' : member.rookieOfTheYearYears.join(', ')),
+                      trailing: const Icon(Icons.edit_outlined),
+                      onTap: () => _editRosterField(
+                        title: 'Rookie of the Year years (comma-separated)',
+                        current: member.rookieOfTheYearYears.join(', '),
+                        numeric: false,
+                        save: (v) => ref.read(userRepositoryProvider).setRookieOfTheYearYears(member.uid, _parseYears(v)),
                       ),
                     ),
                   ],
