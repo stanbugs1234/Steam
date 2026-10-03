@@ -13,3 +13,9 @@ final eventsProvider = StreamProvider<List<ClubEvent>>((ref) {
   if (ref.watch(currentUidProvider) == null) return const Stream.empty();
   return ref.watch(eventRepositoryProvider).watchEvents();
 });
+
+/// A fire-once signal other screens bump to tell an already-mounted
+/// [EventsScreen] (it stays alive inside the bottom-nav `IndexedStack`) to
+/// switch to its "Upcoming" tab. The counter's value is meaningless — only
+/// the fact that it changed matters.
+final eventsJumpToUpcomingProvider = StateProvider<int>((ref) => 0);

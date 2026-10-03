@@ -4,13 +4,27 @@ import 'package:flutter/material.dart';
 /// [AppUser.hallOfFameYears]). Styled distinctly from the other award
 /// badges so they aren't confused when more than one applies.
 class HallOfFameBadge extends StatelessWidget {
-  const HallOfFameBadge({super.key});
+  const HallOfFameBadge({super.key, this.iconOnly = false});
+
+  /// Render just the icon in a colored circle (for dense lists) instead of the labelled pill.
+  final bool iconOnly;
 
   static const _background = Color(0xFFE1BEE7);
   static const _foreground = Color(0xFF4A148C);
 
   @override
   Widget build(BuildContext context) {
+    if (iconOnly) {
+      return Tooltip(
+        message: 'Hall of Fame',
+        child: Container(
+          width: 24,
+          height: 24,
+          decoration: const BoxDecoration(color: _background, shape: BoxShape.circle),
+          child: const Icon(Icons.military_tech, size: 16, color: _foreground, semanticLabel: 'Hall of Fame'),
+        ),
+      );
+    }
     return const Chip(
       avatar: Icon(Icons.military_tech, size: 14, color: _foreground),
       label: Text('Hall of Fame'),

@@ -7,24 +7,62 @@ import '../../../core/utils/avatar_image.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/section_card.dart';
 import '../../../core/widgets/stat_tile.dart';
+import '../../directory/domain/directory_providers.dart';
+import '../../events/domain/event_providers.dart';
 import '../../volunteering/domain/volunteer_providers.dart';
 import '../domain/dashboard_providers.dart';
+
+/// Directory tab index and Events tab index within `HomeShell`'s bottom nav,
+/// per its `_tabBuilders`/`NavigationDestination` order.
+const _directoryTabIndex = 4;
+const _eventsTabIndex = 2;
+
+String _initials(String name) {
+  final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+  if (parts.isEmpty) return '?';
+  if (parts.length == 1) return parts.first[0].toUpperCase();
+  return (parts.first[0] + parts.last[0]).toUpperCase();
+}
 
 /// The club as a whole, rather than "what's next for me" (that's Home's
 /// job): a few headline totals, the volunteer and points leaderboards in
 /// full, and how membership has grown over the last few months.
-class DashboardScreen extends ConsumerWidget {
-  const DashboardScreen({super.key});
+class DashboardScreen extends ConsumerStatefulWidget {
+  const DashboardScreen({super.key, required this.onNavigateToTab});
 
-  static String _initials(String name) {
-    final parts = name.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
-    if (parts.isEmpty) return '?';
-    if (parts.length == 1) return parts.first[0].toUpperCase();
-    return (parts.first[0] + parts.last[0]).toUpperCase();
+  /// Switches the bottom-nav tab in the enclosing `HomeShell` (a KPI card's
+  /// destination is another tab, not a new route).
+  final void Function(int index) onNavigateToTab;
+
+  @override
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  final _volunteerLeaderboardKey = GlobalKey();
+
+  void _goToDirectory({DuesFilter duesFilter = DuesFilter.any}) {
+    ref.read(directorySearchProvider.notifier).state = '';
+    ref.read(directoryGradeFilterProvider.notifier).state = null;
+    ref.read(directoryNewMemberFilterProvider.notifier).state = false;
+    ref.read(directoryDuesFilterProvider.notifier).state = duesFilter;
+    widget.onNavigateToTab(_directoryTabIndex);
+  }
+
+  void _goToUpcomingEvents() {
+    ref.read(eventsJumpToUpcomingProvider.notifier).state++;
+    widget.onNavigateToTab(_eventsTabIndex);
+  }
+
+  void _scrollToVolunteerLeaderboard() {
+    final context = _volunteerLeaderboardKey.currentContext;
+    if (context != null) {
+      Scrollable.ensureVisible(context, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+    }
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final totals = ref.watch(clubTotalsProvider);
     final volunteerEntries = ref.watch(volunteerLeaderboardProvider);
     final pointsEntries = ref.watch(pointsLeaderboardProvider);
@@ -47,7 +85,7 @@ class DashboardScreen extends ConsumerWidget {
                         icon: Icons.people_outline,
                         value: '${totals.memberCount}',
                         label: 'Members',
-                        onTap: () => context.push('/home'),
+                        onTap: () => _goToDirectory(),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -56,7 +94,7 @@ class DashboardScreen extends ConsumerWidget {
                         icon: Icons.check_circle_outline,
                         value: '${totals.duesPaidCount}',
                         label: 'Dues Paid',
-                        onTap: () => context.push('/home'),
+                        onTap: () => _goToDirectory(duesFilter: DuesFilter.paidOnly),
                       ),
                     ),
                   ],
@@ -69,7 +107,7 @@ class DashboardScreen extends ConsumerWidget {
                         icon: Icons.calendar_today_outlined,
                         value: '${totals.upcomingEventCount}',
                         label: totals.upcomingEventCount == 1 ? 'Upcoming Event' : 'Upcoming Events',
-                        onTap: () => context.push('/home'),
+                        onTap: _goToUpcomingEvents,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -78,7 +116,7 @@ class DashboardScreen extends ConsumerWidget {
                         icon: Icons.volunteer_activism_outlined,
                         value: totals.volunteerHours.toStringAsFixed(0),
                         label: 'Volunteer Hours',
-                        onTap: () => context.push('/home'),
+                        onTap: _scrollToVolunteerLeaderboard,
                       ),
                     ),
                   ],
@@ -98,12 +136,15 @@ class DashboardScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 20),
-          _LeaderboardCard(
-            title: 'Volunteer Leaderboard',
-            icon: Icons.volunteer_activism_outlined,
-            emptyMessage: 'No volunteer hours logged yet.',
-            entries: [for (final e in volunteerEntries) RankedMember(member: e.member, value: e.hours)],
-            suffix: 'hrs',
+          KeyedSubtree(
+            key: _volunteerLeaderboardKey,
+            child: _LeaderboardCard(
+              title: 'Volunteer Leaderboard',
+              icon: Icons.volunteer_activism_outlined,
+              emptyMessage: 'No volunteer hours logged yet.',
+              entries: [for (final e in volunteerEntries) RankedMember(member: e.member, value: e.hours)],
+              suffix: 'hrs',
+            ),
           ),
           const SizedBox(height: 20),
           _LeaderboardCard(
@@ -185,7 +226,7 @@ class _LeaderboardRow extends StatelessWidget {
         backgroundImage: member.photoUrl != null ? avatarImage(member.photoUrl!, 20) : null,
         child: member.photoUrl == null
             ? Text(
-                DashboardScreen._initials(member.name),
+                _initials(member.name),
                 style: TextStyle(color: colorScheme.onPrimaryContainer),
               )
             : null,

@@ -114,6 +114,10 @@ class _EventsScreenState extends ConsumerState<EventsScreen>
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<int>(eventsJumpToUpcomingProvider, (prev, next) {
+      if (prev != null) _tabController.animateTo(1);
+    });
+
     final eventsAsync = ref.watch(eventsProvider);
     final isAdmin = ref.watch(currentAppUserProvider).valueOrNull?.isAdmin ?? false;
     final myEventIds = <String>{

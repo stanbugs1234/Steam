@@ -29,7 +29,7 @@ class _HomeShellState extends ConsumerState<HomeShell> {
 
   late final List<Widget Function()> _tabBuilders = [
     () => HomeDashboardScreen(onNavigateToTab: _navigateToTab),
-    () => const DashboardScreen(),
+    () => DashboardScreen(onNavigateToTab: _navigateToTab),
     () => const EventsScreen(),
     () => const MyCommitmentsScreen(),
     () => const DirectoryListScreen(),

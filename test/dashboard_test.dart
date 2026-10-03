@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:steam_app/features/auth/domain/auth_providers.dart';
 import 'package:steam_app/features/dashboard/domain/dashboard_providers.dart';
 import 'package:steam_app/features/dashboard/presentation/dashboard_screen.dart';
+import 'package:steam_app/features/directory/domain/directory_providers.dart';
 import 'package:steam_app/features/events/domain/event_providers.dart';
 import 'package:steam_app/features/volunteering/domain/volunteer_providers.dart';
 import 'package:steam_app/models/app_user.dart';
@@ -156,19 +157,21 @@ void main() {
   });
 
   group('DashboardScreen', () {
-    Widget wrap({double textScale = 1.0}) => ProviderScope(
-          overrides: [
-            approvedMembersProvider.overrideWith((ref) => Stream.value([
-                  _member('a', name: 'Ada', duesPaid: true, yearlyPoints: 10, createdAt: DateTime.now()),
-                  _member('b', name: 'Bo', yearlyPoints: 4),
-                ])),
-            eventsProvider.overrideWith((ref) => Stream.value(const [])),
-            volunteerHoursProvider.overrideWith((ref) async => {'a': 6.0, 'b': 2.0}),
-          ],
+    List<Override> defaultOverrides() => [
+          approvedMembersProvider.overrideWith((ref) => Stream.value([
+                _member('a', name: 'Ada', duesPaid: true, yearlyPoints: 10, createdAt: DateTime.now()),
+                _member('b', name: 'Bo', yearlyPoints: 4),
+              ])),
+          eventsProvider.overrideWith((ref) => Stream.value(const [])),
+          volunteerHoursProvider.overrideWith((ref) async => {'a': 6.0, 'b': 2.0}),
+        ];
+
+    Widget wrap({double textScale = 1.0, void Function(int)? onNavigateToTab}) => ProviderScope(
+          overrides: defaultOverrides(),
           child: MaterialApp(
             home: MediaQuery(
               data: MediaQueryData(textScaler: TextScaler.linear(textScale)),
-              child: const DashboardScreen(),
+              child: DashboardScreen(onNavigateToTab: onNavigateToTab ?? (_) {}),
             ),
           ),
         );
@@ -197,6 +200,86 @@ void main() {
       await tester.pump();
       await tester.pump();
       await tester.scrollUntilVisible(find.text('Points Leaderboard'), 300);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('tapping Members resets directory filters and switches to the Directory tab', (tester) async {
+      _tallScreen(tester);
+      final container = ProviderContainer(overrides: defaultOverrides());
+      addTearDown(container.dispose);
+      container.read(directoryGradeFilterProvider.notifier).state = 'Kindergarten';
+      container.read(directoryDuesFilterProvider.notifier).state = DuesFilter.unpaidOnly;
+      int? tappedIndex;
+
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(home: DashboardScreen(onNavigateToTab: (i) => tappedIndex = i)),
+      ));
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.text('Members'));
+      await tester.pump();
+
+      expect(tappedIndex, 4);
+      expect(container.read(directoryGradeFilterProvider), isNull);
+      expect(container.read(directoryDuesFilterProvider), DuesFilter.any);
+    });
+
+    testWidgets('tapping Dues Paid filters the directory to paid members and switches tabs', (tester) async {
+      _tallScreen(tester);
+      final container = ProviderContainer(overrides: defaultOverrides());
+      addTearDown(container.dispose);
+      int? tappedIndex;
+
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(home: DashboardScreen(onNavigateToTab: (i) => tappedIndex = i)),
+      ));
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.text('Dues Paid'));
+      await tester.pump();
+
+      expect(tappedIndex, 4);
+      expect(container.read(directoryDuesFilterProvider), DuesFilter.paidOnly);
+    });
+
+    testWidgets('tapping Upcoming Events bumps the jump trigger and switches to the Events tab', (tester) async {
+      _tallScreen(tester);
+      final container = ProviderContainer(overrides: defaultOverrides());
+      addTearDown(container.dispose);
+      int? tappedIndex;
+
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(home: DashboardScreen(onNavigateToTab: (i) => tappedIndex = i)),
+      ));
+      await tester.pump();
+      await tester.pump();
+
+      final before = container.read(eventsJumpToUpcomingProvider);
+      await tester.tap(find.text('Upcoming Events'));
+      await tester.pump();
+
+      expect(tappedIndex, 2);
+      expect(container.read(eventsJumpToUpcomingProvider), before + 1);
+    });
+
+    testWidgets('tapping Volunteer Hours scrolls to the Volunteer Leaderboard without switching tabs',
+        (tester) async {
+      _tallScreen(tester);
+      int? tappedIndex;
+      await tester.pumpWidget(wrap(onNavigateToTab: (i) => tappedIndex = i));
+      await tester.pump();
+      await tester.pump();
+
+      await tester.tap(find.text('Volunteer Hours'));
+      await tester.pumpAndSettle();
+
+      expect(tappedIndex, isNull);
+      expect(find.text('Volunteer Leaderboard'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

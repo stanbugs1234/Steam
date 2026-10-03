@@ -10,16 +10,17 @@ import '../../../core/widgets/children_form_field.dart' show kGradeOptions;
 import '../../../core/widgets/dues_paid_badge.dart';
 import '../../../core/widgets/empty_state.dart';
 import '../../../core/widgets/error_state.dart';
+import '../../../core/widgets/good_buddy_badge.dart';
+import '../../../core/widgets/hall_of_fame_badge.dart';
 import '../../../core/widgets/new_member_badge.dart';
+import '../../../core/widgets/presidents_award_badge.dart';
+import '../../../core/widgets/rookie_of_the_year_badge.dart';
 import '../../../core/widgets/top_volunteer_badge.dart';
 import '../../../models/app_user.dart';
 import '../../auth/domain/auth_providers.dart';
 import '../../volunteering/domain/volunteer_providers.dart';
+import '../domain/directory_providers.dart';
 import 'kids_list.dart';
-
-final _directorySearchProvider = StateProvider<String>((ref) => '');
-final _directoryGradeFilterProvider = StateProvider<String?>((ref) => null);
-final _directoryNewMemberFilterProvider = StateProvider<bool>((ref) => false);
 
 final _nonDigits = RegExp(r'\D');
 String _digitsOnly(String s) => s.replaceAll(_nonDigits, '');
@@ -45,14 +46,14 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
   void _onSearchChanged(String value) {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 300), () {
-      ref.read(_directorySearchProvider.notifier).state = value;
+      ref.read(directorySearchProvider.notifier).state = value;
     });
   }
 
   void _clearSearch() {
     _debounce?.cancel();
     _searchCtrl.clear();
-    ref.read(_directorySearchProvider.notifier).state = '';
+    ref.read(directorySearchProvider.notifier).state = '';
   }
 
   void _openFilters() {
@@ -66,11 +67,17 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    ref.listen<String>(directorySearchProvider, (prev, next) {
+      if (_searchCtrl.text != next) _searchCtrl.text = next;
+    });
+
     final membersAsync = ref.watch(approvedMembersProvider);
-    final query = ref.watch(_directorySearchProvider).trim().toLowerCase();
-    final gradeFilter = ref.watch(_directoryGradeFilterProvider);
-    final onlyNewMembers = ref.watch(_directoryNewMemberFilterProvider);
-    final activeFilters = (gradeFilter != null ? 1 : 0) + (onlyNewMembers ? 1 : 0);
+    final query = ref.watch(directorySearchProvider).trim().toLowerCase();
+    final gradeFilter = ref.watch(directoryGradeFilterProvider);
+    final onlyNewMembers = ref.watch(directoryNewMemberFilterProvider);
+    final duesFilter = ref.watch(directoryDuesFilterProvider);
+    final activeFilters =
+        (gradeFilter != null ? 1 : 0) + (onlyNewMembers ? 1 : 0) + (duesFilter != DuesFilter.any ? 1 : 0);
 
     final resultSlivers = membersAsync.when(
       data: (members) {
@@ -82,7 +89,12 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
               (queryDigits.isNotEmpty && _digitsOnly(m.phone).contains(queryDigits));
           final matchesGrade = gradeFilter == null || m.kids.any((k) => k.grade == gradeFilter);
           final matchesNewMember = !onlyNewMembers || m.isNewMember;
-          return matchesQuery && matchesGrade && matchesNewMember;
+          final matchesDues = switch (duesFilter) {
+            DuesFilter.any => true,
+            DuesFilter.paidOnly => m.duesPaid,
+            DuesFilter.unpaidOnly => !m.duesPaid,
+          };
+          return matchesQuery && matchesGrade && matchesNewMember && matchesDues;
         }).toList();
 
         if (filtered.isEmpty) {
@@ -91,11 +103,15 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
               hasScrollBody: false,
               child: EmptyState(
                 icon: Icons.people_outline,
-                message: onlyNewMembers
-                    ? 'No new members found.'
-                    : gradeFilter == null
-                        ? 'No members found.'
-                        : 'No members found with a kid in $gradeFilter.',
+                message: switch (duesFilter) {
+                  DuesFilter.paidOnly => 'No members with paid dues found.',
+                  DuesFilter.unpaidOnly => 'No members with unpaid dues found.',
+                  DuesFilter.any => onlyNewMembers
+                      ? 'No new members found.'
+                      : gradeFilter == null
+                          ? 'No members found.'
+                          : 'No members found with a kid in $gradeFilter.',
+                },
               ),
             ),
           ];
@@ -110,7 +126,9 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
                 child: Text(
                   '${filtered.length} member${filtered.length == 1 ? '' : 's'}'
                   '${gradeFilter == null ? '' : ' · $gradeFilter'}'
-                  '${onlyNewMembers ? ' · New' : ''}',
+                  '${onlyNewMembers ? ' · New' : ''}'
+                  '${duesFilter == DuesFilter.paidOnly ? ' · Paid dues' : ''}'
+                  '${duesFilter == DuesFilter.unpaidOnly ? ' · Unpaid dues' : ''}',
                   style: Theme.of(context).textTheme.labelLarge?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w600,
@@ -203,15 +221,23 @@ class _DirectoryListScreenState extends ConsumerState<DirectoryListScreen> {
                             if (gradeFilter != null)
                               InputChip(
                                 label: Text(gradeFilter),
-                                onDeleted: () => ref.read(_directoryGradeFilterProvider.notifier).state = null,
+                                onDeleted: () => ref.read(directoryGradeFilterProvider.notifier).state = null,
                                 deleteButtonTooltipMessage: 'Remove grade filter',
                               ),
                             if (onlyNewMembers)
                               InputChip(
                                 avatar: const Icon(Icons.auto_awesome, size: 18),
                                 label: const Text('New members'),
-                                onDeleted: () => ref.read(_directoryNewMemberFilterProvider.notifier).state = false,
+                                onDeleted: () => ref.read(directoryNewMemberFilterProvider.notifier).state = false,
                                 deleteButtonTooltipMessage: 'Remove new members filter',
+                              ),
+                            if (duesFilter != DuesFilter.any)
+                              InputChip(
+                                avatar: const Icon(Icons.money_off, size: 18),
+                                label: Text(duesFilter == DuesFilter.paidOnly ? 'Paid dues' : 'Unpaid dues'),
+                                onDeleted: () =>
+                                    ref.read(directoryDuesFilterProvider.notifier).state = DuesFilter.any,
+                                deleteButtonTooltipMessage: 'Remove dues filter',
                               ),
                           ],
                         ),
@@ -259,11 +285,16 @@ class _MemberTile extends ConsumerWidget {
               : null,
         ),
         title: Text(member.name, overflow: TextOverflow.ellipsis),
-        subtitle: (member.isAdmin || isTopVolunteer || member.isNewMember || member.duesPaid || member.kids.isNotEmpty)
+        subtitle: (member.isAdmin ||
+                isTopVolunteer ||
+                member.isNewMember ||
+                member.duesPaid ||
+                member.hasAnyAward ||
+                member.kids.isNotEmpty)
             ? Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (member.isAdmin || isTopVolunteer || member.isNewMember || member.duesPaid)
+                  if (member.isAdmin || isTopVolunteer || member.isNewMember || member.duesPaid || member.hasAnyAward)
                     Padding(
                       padding: const EdgeInsets.only(top: 4, bottom: 2),
                       child: Wrap(
@@ -274,6 +305,10 @@ class _MemberTile extends ConsumerWidget {
                           if (isTopVolunteer) const TopVolunteerBadge(),
                           if (member.isNewMember) const NewMemberBadge(),
                           if (member.duesPaid) const DuesPaidBadge(iconOnly: true),
+                          if (member.goodBuddyYears.isNotEmpty) const GoodBuddyBadge(iconOnly: true),
+                          if (member.presidentsAwardYears.isNotEmpty) const PresidentsAwardBadge(iconOnly: true),
+                          if (member.hallOfFameYears.isNotEmpty) const HallOfFameBadge(iconOnly: true),
+                          if (member.rookieOfTheYearYears.isNotEmpty) const RookieOfTheYearBadge(iconOnly: true),
                         ],
                       ),
                     ),
@@ -294,8 +329,9 @@ class _FiltersSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final gradeFilter = ref.watch(_directoryGradeFilterProvider);
-    final onlyNewMembers = ref.watch(_directoryNewMemberFilterProvider);
+    final gradeFilter = ref.watch(directoryGradeFilterProvider);
+    final onlyNewMembers = ref.watch(directoryNewMemberFilterProvider);
+    final duesFilter = ref.watch(directoryDuesFilterProvider);
 
     return SafeArea(
       child: SingleChildScrollView(
@@ -313,25 +349,36 @@ class _FiltersSheet extends ConsumerWidget {
                 const DropdownMenuItem(value: null, child: Text('Any grade')),
                 for (final grade in kGradeOptions) DropdownMenuItem(value: grade, child: Text(grade)),
               ],
-              onChanged: (value) => ref.read(_directoryGradeFilterProvider.notifier).state = value,
+              onChanged: (value) => ref.read(directoryGradeFilterProvider.notifier).state = value,
             ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               secondary: const Icon(Icons.auto_awesome),
               title: const Text('New members only'),
               value: onlyNewMembers,
-              onChanged: (value) => ref.read(_directoryNewMemberFilterProvider.notifier).state = value,
+              onChanged: (value) => ref.read(directoryNewMemberFilterProvider.notifier).state = value,
+            ),
+            DropdownButtonFormField<DuesFilter>(
+              initialValue: duesFilter,
+              decoration: const InputDecoration(labelText: 'Dues paid', prefixIcon: Icon(Icons.money_off)),
+              items: const [
+                DropdownMenuItem(value: DuesFilter.any, child: Text('Any')),
+                DropdownMenuItem(value: DuesFilter.paidOnly, child: Text('Paid only')),
+                DropdownMenuItem(value: DuesFilter.unpaidOnly, child: Text('Unpaid only')),
+              ],
+              onChanged: (value) => ref.read(directoryDuesFilterProvider.notifier).state = value ?? DuesFilter.any,
             ),
             const SizedBox(height: 8),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: gradeFilter == null && !onlyNewMembers
+                    onPressed: gradeFilter == null && !onlyNewMembers && duesFilter == DuesFilter.any
                         ? null
                         : () {
-                            ref.read(_directoryGradeFilterProvider.notifier).state = null;
-                            ref.read(_directoryNewMemberFilterProvider.notifier).state = false;
+                            ref.read(directoryGradeFilterProvider.notifier).state = null;
+                            ref.read(directoryNewMemberFilterProvider.notifier).state = false;
+                            ref.read(directoryDuesFilterProvider.notifier).state = DuesFilter.any;
                           },
                     child: const Text('Clear all'),
                   ),
