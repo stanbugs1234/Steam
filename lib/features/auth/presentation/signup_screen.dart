@@ -296,6 +296,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         yearlyPoints: placeholder?.yearlyPoints,
         duesPaid: placeholder?.duesPaid ?? false,
         isNewMember: placeholder?.isNewMember ?? false,
+        goodBuddyYears: placeholder?.goodBuddyYears ?? const [],
+        presidentsAwardYears: placeholder?.presidentsAwardYears ?? const [],
+        hallOfFameYears: placeholder?.hallOfFameYears ?? const [],
+        rookieOfTheYearYears: placeholder?.rookieOfTheYearYears ?? const [],
       );
 
       if (placeholder != null) {
@@ -435,6 +439,10 @@ class _SignupScreenState extends ConsumerState<SignupScreen> {
         yearlyPoints: placeholder?.yearlyPoints,
         duesPaid: placeholder?.duesPaid ?? false,
         isNewMember: placeholder?.isNewMember ?? false,
+        goodBuddyYears: placeholder?.goodBuddyYears ?? const [],
+        presidentsAwardYears: placeholder?.presidentsAwardYears ?? const [],
+        hallOfFameYears: placeholder?.hallOfFameYears ?? const [],
+        rookieOfTheYearYears: placeholder?.rookieOfTheYearYears ?? const [],
       );
 
       if (placeholder != null) {
